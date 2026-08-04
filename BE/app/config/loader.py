@@ -14,10 +14,12 @@ class ConfigLoadError(RuntimeError):
 
 
 class WorkflowConfigLoader:
+    # Shared defaults every tenant inherits. Business and HITL rules are NOT
+    # here: they are tenant-specific and must be declared in each
+    # tenants/<id>.yaml file.
     REQUIRED_FILES = (
         "document_types.yaml",
         "entity_schema.yaml",
-        "validation_rules.yaml",
         "hitl_policy.yaml",
         "letter_templates.yaml",
     )
@@ -26,18 +28,18 @@ class WorkflowConfigLoader:
         self._config_dir = config_dir
         self._tenant_dir = config_dir / "tenants"
 
-    def list_provider_configs(self, tenant_id: str = "default") -> list[ProviderConfig]:
+    def list_tenant_configs(self, tenant_id: str = "default") -> list[ProviderConfig]:
         return [
-            self.load_provider_config(tenant_id=tenant_id, provider_id=path.stem)
+            self.load_tenant_config(tenant_id=tenant_id, provider_id=path.stem)
             for path in sorted(self._tenant_dir.glob("*.yaml"))
         ]
 
-    def load_provider_config(self, tenant_id: str, provider_id: str) -> ProviderConfig:
+    def load_tenant_config(self, tenant_id: str, provider_id: str) -> ProviderConfig:
         base = self._load_base_config()
         tenant_path = self._tenant_dir / f"{provider_id}.yaml"
         if not tenant_path.exists():
             if provider_id != "default":
-                raise ConfigLoadError(f"Missing tenant/provider override: {tenant_path}")
+                raise ConfigLoadError(f"Missing tenant override: {tenant_path}")
             tenant_path = self._tenant_dir / "default.yaml"
 
         merged = self._deep_merge(base, self._read_yaml(tenant_path))

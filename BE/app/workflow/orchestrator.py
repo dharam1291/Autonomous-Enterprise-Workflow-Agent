@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.config.provider_config import ProviderConfigRepository
+from app.config.tenant_config import TenantConfigRepository
 from app.domain.models import (
     HumanReviewAction,
     WorkflowState,
@@ -25,11 +25,10 @@ class InvalidWorkflowTransitionError(RuntimeError):
 class ClaimWorkflowOrchestrator:
     def __init__(
         self,
-        config_repository: ProviderConfigRepository,
+        config_repository: TenantConfigRepository,
         state_store: WorkflowStateStore,
         rule_engine: RuleEngine | None = None,
         llm_provider_factory: LLMProviderFactory | None = None,
-        **_legacy_services: object,
     ) -> None:
         self._config_repository = config_repository
         self._state_store = state_store

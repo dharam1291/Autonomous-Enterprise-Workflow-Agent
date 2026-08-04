@@ -1,7 +1,23 @@
+# Care Health tenant. Enabled provider with its own policy-number format and
+# coverage/HITL thresholds. Same section structure as every other tenant.
 tenant_id: care_health
 provider_id: care_health
 display_name: Care Health
 enabled: true
+
+features:
+  pdf_ingestion: true
+  auto_processing: true
+  auto_approval: true
+  hitl_review: true
+  rejection_letter_generation: true
+
+llm:
+  provider: deterministic
+  model: local-regex-extractor
+  temperature: 0
+  max_tokens: 1200
+
 business_rules:
   - id: POLICY_NUMBER_FORMAT
     description: Care Health policy number format is valid.
@@ -19,6 +35,7 @@ business_rules:
     parameters:
       entity: claim_amount
       max: 75000
+
 hitl_rules:
   - id: CARE_HEALTH_HIGH_VALUE_REVIEW
     description: Care Health claim amount is within automatic processing threshold.

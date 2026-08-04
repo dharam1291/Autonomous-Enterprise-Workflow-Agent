@@ -2,10 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.config.provider_config import ProviderConfigRepository
-from app.services.document_classifier import DocumentClassifier
-from app.services.entity_extractor import ConfigDrivenEntityExtractor
-from app.services.letter_generator import LetterGenerator
+from app.config.tenant_config import TenantConfigRepository
 from app.services.rule_engine import RuleEngine
 from app.storage.state_store import JsonWorkflowStateStore
 from app.workflow.orchestrator import ClaimWorkflowOrchestrator
@@ -13,12 +10,9 @@ from app.workflow.orchestrator import ClaimWorkflowOrchestrator
 
 def build_orchestrator(tmp_path: Path) -> ClaimWorkflowOrchestrator:
     return ClaimWorkflowOrchestrator(
-        config_repository=ProviderConfigRepository(Path("config/providers")),
+        config_repository=TenantConfigRepository(Path("config")),
         state_store=JsonWorkflowStateStore(tmp_path),
-        classifier=DocumentClassifier(),
-        extractor=ConfigDrivenEntityExtractor(),
         rule_engine=RuleEngine(),
-        letter_generator=LetterGenerator(),
     )
 
 
