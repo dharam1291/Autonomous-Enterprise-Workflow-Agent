@@ -49,10 +49,10 @@ if [ ! -x "$VENV_DIR/bin/python" ]; then
   "$PYTHON_BIN" -m venv "$VENV_DIR"
 fi
 
-if ! "$VENV_DIR/bin/python" -c "import fastapi, uvicorn, langgraph, pydantic, yaml, dotenv" >/dev/null 2>&1; then
+if ! "$VENV_DIR/bin/python" -c "import fastapi, uvicorn, langgraph, pydantic, yaml, dotenv, prometheus_client, opentelemetry.sdk" >/dev/null 2>&1; then
   log "Installing backend dependencies"
   "$VENV_DIR/bin/pip" install -q --upgrade pip
-  (cd "$BE_DIR" && "$VENV_DIR/bin/pip" install -q -e ".[dev,pdf]")
+  (cd "$BE_DIR" && "$VENV_DIR/bin/pip" install -q -e ".[dev,pdf,observability]")
 fi
 
 mkdir -p "$ROOT_DIR/data/workflows"

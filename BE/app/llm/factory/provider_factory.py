@@ -5,6 +5,7 @@ from app.llm.clients.anthropic_client import AnthropicClient
 from app.llm.clients.base_client import LLMClient
 from app.llm.clients.deterministic_client import DeterministicLLMClient
 from app.llm.clients.openai_client import OpenAIClient
+from app.observability import instrument_llm_client
 
 
 class LLMProviderFactory:
@@ -12,6 +13,9 @@ class LLMProviderFactory:
         self._deterministic = DeterministicLLMClient()
 
     def create(self, config: ProviderConfig) -> LLMClient:
+        return instrument_llm_client(self._resolve(config))
+
+    def _resolve(self, config: ProviderConfig) -> LLMClient:
         if config.llm.provider == "openai":
             return OpenAIClient()
         if config.llm.provider == "anthropic":

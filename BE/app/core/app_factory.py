@@ -9,6 +9,7 @@ from app.api.routes import router
 from app.core.container import build_container
 from app.core.logging_config import configure_logging
 from app.core.settings import AppSettings
+from app.observability import configure_observability
 
 logger = logging.getLogger(__name__)
 
@@ -31,5 +32,6 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     )
     app.state.container = build_container(settings)
     app.include_router(router)
+    configure_observability(app, settings)
 
     return app

@@ -14,7 +14,13 @@ from app.graph.nodes.hitl_decision_node import HitlDecisionNode
 from app.graph.nodes.letter_generation_node import LetterGenerationNode
 from app.graph.state import ClaimGraphState
 from app.llm.clients.base_client import LLMClient
+from app.observability import instrument_node
 from app.services.rule_engine import RuleEngine
+
+
+def _add_node(graph: StateGraph, name: str, node) -> None:
+    """Register a node wrapped with observability (span + node metrics)."""
+    graph.add_node(name, instrument_node(name, node))
 
 
 class ClaimWorkflowGraph:
@@ -74,14 +80,14 @@ class ClaimWorkflowGraph:
     @staticmethod
     def _build_graph(llm_client: LLMClient, rule_engine: RuleEngine) -> StateGraph:
         graph = StateGraph(ClaimGraphState)
-        graph.add_node("document_ingestion", DocumentIngestionNode())
-        graph.add_node("document_classification", DocumentClassificationNode(llm_client))
-        graph.add_node("entity_extraction", EntityExtractionNode(llm_client))
-        graph.add_node("extraction_quality_validation", ExtractionQualityValidationNode(rule_engine))
-        graph.add_node("business_rule_validation", BusinessValidationNode(rule_engine))
-        graph.add_node("hitl_decision", HitlDecisionNode(rule_engine, llm_client))
-        graph.add_node("letter_or_summary_generation", LetterGenerationNode(llm_client))
-        graph.add_node("audit_logging", AuditLoggingNode(rule_engine))
+        _add_node(graph, "document_ingestion", DocumentIngestionNode())
+        _add_node(graph, "document_classification", DocumentClassificationNode(llm_client))
+        _add_node(graph, "entity_extraction", EntityExtractionNode(llm_client))
+        _add_node(graph, "extraction_quality_validation", ExtractionQualityValidationNode(rule_engine))
+        _add_node(graph, "business_rule_validation", BusinessValidationNode(rule_engine))
+        _add_node(graph, "hitl_decision", HitlDecisionNode(rule_engine, llm_client))
+        _add_node(graph, "letter_or_summary_generation", LetterGenerationNode(llm_client))
+        _add_node(graph, "audit_logging", AuditLoggingNode(rule_engine))
 
         graph.add_edge(START, "document_ingestion")
         graph.add_conditional_edges(
@@ -118,9 +124,9 @@ class ClaimWorkflowGraph:
     @staticmethod
     def _build_resume_graph(llm_client: LLMClient, rule_engine: RuleEngine) -> StateGraph:
         graph = StateGraph(ClaimGraphState)
-        graph.add_node("hitl_decision", HitlDecisionNode(rule_engine, llm_client))
-        graph.add_node("letter_or_summary_generation", LetterGenerationNode(llm_client))
-        graph.add_node("audit_logging", AuditLoggingNode(rule_engine))
+        _add_node(graph, "hitl_decision", HitlDecisionNode(rule_engine, llm_client))
+        _add_node(graph, "letter_or_summary_generation", LetterGenerationNode(llm_client))
+        _add_node(graph, "audit_logging", AuditLoggingNode(rule_engine))
         graph.add_edge(START, "hitl_decision")
         graph.add_edge("hitl_decision", "letter_or_summary_generation")
         graph.add_edge("letter_or_summary_generation", "audit_logging")
