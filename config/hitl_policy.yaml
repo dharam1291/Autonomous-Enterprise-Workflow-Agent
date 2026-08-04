@@ -1,0 +1,4 @@
+hitl_policy:
+  review_timeout_minutes: 30
+  on_timeout: escalate
+  escalation_role: senior_caseworker

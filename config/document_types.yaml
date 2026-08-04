@@ -1,0 +1,6 @@
+document_signals:
+  - claim
+  - policy number
+  - claim amount
+  - claimant
+minimum_signal_match: 2

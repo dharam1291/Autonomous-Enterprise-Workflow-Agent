@@ -1,0 +1,10 @@
+tenant_id: default
+provider_id: max_bupa
+display_name: Max Bupa
+enabled: false
+features:
+  pdf_ingestion: false
+  auto_processing: false
+  auto_approval: false
+  hitl_review: false
+  rejection_letter_generation: false

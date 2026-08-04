@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+data/workflows/*.json
+data/workflows/*.tmp
+.idea
+

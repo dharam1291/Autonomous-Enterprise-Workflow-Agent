@@ -1,0 +1,36 @@
+entity_definitions:
+  - name: claimant_name
+    requirement: mandatory
+    patterns:
+      - "Claimant(?: Name)?:\\s*(?P<value>[A-Za-z][A-Za-z .'-]{2,})"
+      - "Patient(?: Name)?:\\s*(?P<value>[A-Za-z][A-Za-z .'-]{2,})"
+    confidence_threshold: 0.8
+  - name: policy_number
+    requirement: mandatory
+    patterns:
+      - "Policy Number:\\s*(?P<value>[A-Z]{3}-\\d{6})"
+      - "Policy No\\.?\\s*:\\s*(?P<value>[A-Z]{3}-\\d{6})"
+    confidence_threshold: 0.85
+  - name: claim_amount
+    requirement: mandatory
+    patterns:
+      - "Claim Amount:\\s*\\$?(?P<value>[0-9][0-9,]*(?:\\.\\d{2})?)"
+      - "Amount Claimed:\\s*\\$?(?P<value>[0-9][0-9,]*(?:\\.\\d{2})?)"
+    confidence_threshold: 0.9
+  - name: claim_reason
+    requirement: mandatory
+    patterns:
+      - "Reason(?: for Claim)?:\\s*(?P<value>[^\\n]+)"
+    confidence_threshold: 0.75
+  - name: provider_name
+    requirement: optional
+    patterns:
+      - "Provider(?: Name)?:\\s*(?P<value>[^\\n]+)"
+      - "Hospital(?: Name)?:\\s*(?P<value>[^\\n]+)"
+    confidence_threshold: 0.7
+  - name: incident_date
+    requirement: optional
+    patterns:
+      - "Incident Date:\\s*(?P<value>\\d{4}-\\d{2}-\\d{2})"
+      - "Service Date:\\s*(?P<value>\\d{4}-\\d{2}-\\d{2})"
+    confidence_threshold: 0.7

@@ -1,0 +1,7 @@
+{
+  "tenant_id": "default",
+  "provider_id": "default",
+  "source_name": "high-value-claim.txt",
+  "document_text": "Claim Form\nClaimant Name: Rahul Sharma\nPolicy Number: ABC-987654\nClaim Amount: $14500\nReason for Claim: Surgery and inpatient hospitalization\nProvider Name: Metro Hospital\nService Date: 2026-07-21"
+}
+

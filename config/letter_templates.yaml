@@ -1,0 +1,22 @@
+letter_templates:
+  approval: |
+    Dear {claimant},
+
+    We are pleased to inform you that your claim for {amount} under policy {policy} has been approved {qualifier}. This draft is prepared for caseworker sign-off and final dispatch.
+
+    Sincerely,
+    Claims Operations Team
+  rejection: |
+    Dear {claimant},
+
+    Your claim under policy {policy} cannot be approved {qualifier}. Reason: {reason_text}. This draft is prepared for caseworker review before final dispatch.
+
+    Sincerely,
+    Claims Operations Team
+  more_info: |
+    Dear {claimant},
+
+    Additional information is required before your claim can be processed. A caseworker will contact you with the specific documentation required.
+
+    Sincerely,
+    Claims Operations Team
