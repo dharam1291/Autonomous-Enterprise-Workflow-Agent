@@ -4,13 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
-from app.api.schemas import (
-    ClaimTextRequest,
-    HumanReviewRequest,
-    ProviderSummary,
-    SampleClaim,
-    WorkflowResponse,
-)
+from app.api.schemas import ClaimTextRequest, HumanReviewRequest, ProviderSummary, WorkflowResponse
 from app.core.container import AppContainer
 from app.domain.models import WorkflowState, WorkflowStatus
 from app.services.document_loader import DocumentLoaderError
@@ -48,21 +42,6 @@ def providers(container: AppContainer = Depends(get_container)) -> list[Provider
             enabled=config.enabled,
         )
         for config in container.config_repository.list()
-    ]
-
-
-@router.get("/samples", response_model=list[SampleClaim])
-def samples(container: AppContainer = Depends(get_container)) -> list[SampleClaim]:
-    return [
-        SampleClaim(
-            id=sample.id,
-            label=sample.label,
-            tenant_id=sample.tenant_id,
-            provider_id=sample.provider_id,
-            source_name=sample.source_name,
-            document_text=sample.document_text,
-        )
-        for sample in container.sample_repository.list()
     ]
 
 

@@ -1,14 +1,107 @@
 const state = {
   selectedWorkflowId: null,
   workflows: [],
-  samples: [],
 };
 
 const byId = (id) => document.getElementById(id);
 
+// Pipeline stages mirror the LangGraph node order in BE/app/graph/builder.py.
+// Each stage is considered "reached" once one of its marker strings appears
+// in WorkflowState.audit_events - the same audit trail the API returns for
+// every claim, so this is a rendering of BE-reported progress, not a guess.
+const PIPELINE_STAGES = [
+  { id: "received", label: "Claim Received", markers: ["Workflow received."] },
+  {
+    id: "document_ingestion",
+    label: "Document Ingestion",
+    markers: ["Document ingestion completed.", "Provider is disabled by feature flag."],
+  },
+  {
+    id: "document_classification",
+    label: "Document Classification",
+    markers: ["Document classification started."],
+  },
+  { id: "entity_extraction", label: "Entity Extraction", markers: ["Entity extraction completed."] },
+  {
+    id: "extraction_quality_validation",
+    label: "Extraction Quality Validation",
+    markers: ["Extraction quality validation completed."],
+  },
+  {
+    id: "business_rule_validation",
+    label: "Business Validation",
+    markers: ["Business rule validation completed."],
+  },
+  {
+    id: "hitl_decision",
+    label: "HITL Decision",
+    markers: ["HITL policy validation completed.", "Workflow resumed after human review."],
+  },
+  {
+    id: "letter_or_summary_generation",
+    label: "Letter / Summary Generation",
+    markers: ["Letter or summary generation completed."],
+  },
+  { id: "audit_logging", label: "Audit Logging", markers: ["Audit logging completed."] },
+];
+
+function computeStages(workflow) {
+  const events = workflow.audit_events || [];
+  const reached = (markers) => markers.some((marker) => events.some((event) => event.includes(marker)));
+  const isWaiting = workflow.status === "WAITING_FOR_HUMAN_REVIEW";
+  const isInFlight = workflow.status === "RECEIVED" || workflow.status === "PROCESSING";
+
+  let stopped = false;
+  return PIPELINE_STAGES.map((stage) => {
+    if (stopped) {
+      return { ...stage, state: isWaiting || isInFlight ? "pending" : "skipped" };
+    }
+    const isReached = reached(stage.markers);
+    if (stage.id === "hitl_decision" && isWaiting && isReached) {
+      stopped = true;
+      return { ...stage, state: "waiting" };
+    }
+    if (isReached) {
+      return { ...stage, state: "done" };
+    }
+    stopped = true;
+    return { ...stage, state: isWaiting || isInFlight ? "pending" : "skipped" };
+  });
+}
+
+function renderStages(workflow) {
+  const list = byId("pipeline-stepper");
+  list.innerHTML = "";
+  if (!workflow) {
+    return;
+  }
+  computeStages(workflow).forEach((stage) => {
+    const item = document.createElement("li");
+    item.className = `step step-${stage.state}`;
+    item.innerHTML = `<span class="step-marker"></span><span class="step-label">${stage.label}</span><span class="step-state">${stepStateLabel(stage.state)}</span>`;
+    list.appendChild(item);
+  });
+}
+
+function stepStateLabel(stepState) {
+  switch (stepState) {
+    case "done":
+      return "Done";
+    case "waiting":
+      return "Waiting for review";
+    case "skipped":
+      return "Skipped";
+    case "pending":
+      return "Pending";
+    default:
+      return "";
+  }
+}
+
 async function requestJson(path, options = {}) {
+  const isFormData = options.body instanceof FormData;
   const response = await fetch(`${window.API_BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers: isFormData ? options.headers : { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
   });
   if (!response.ok) {
@@ -45,26 +138,6 @@ async function loadProviders() {
     option.textContent = `${provider.display_name}${provider.enabled ? "" : " (disabled)"}`;
     select.appendChild(option);
   });
-}
-
-async function loadSamples() {
-  state.samples = await requestJson("/samples");
-  const select = byId("sample-select");
-  select.innerHTML = "";
-  state.samples.forEach((sample) => {
-    const option = document.createElement("option");
-    option.value = sample.id;
-    option.textContent = sample.label;
-    select.appendChild(option);
-  });
-}
-
-function loadSelectedSample() {
-  const sample = state.samples.find((item) => item.id === byId("sample-select").value);
-  if (!sample) return;
-  byId("document-text").value = sample.document_text;
-  byId("source-name").value = sample.source_name;
-  byId("provider-select").value = sample.provider_id;
 }
 
 async function loadWorkflows() {
@@ -107,6 +180,7 @@ function selectWorkflow(workflow) {
   byId("review-workflow").textContent =
     workflow.status === "WAITING_FOR_HUMAN_REVIEW" ? workflow.workflow_id : "None";
 
+  renderStages(workflow);
   renderEntities(workflow);
   renderFindings(workflow);
   byId("generated-output").textContent =
@@ -152,20 +226,74 @@ function renderFindings(workflow) {
   });
 }
 
+const ALLOWED_FILE_EXTENSIONS = [".pdf", ".txt"];
+
+function isAllowedFile(file) {
+  const name = file.name.toLowerCase();
+  return ALLOWED_FILE_EXTENSIONS.some((extension) => name.endsWith(extension));
+}
+
+function showFileError(message) {
+  const errorEl = byId("file-error");
+  errorEl.textContent = message;
+  errorEl.hidden = !message;
+}
+
+function onFileChosen() {
+  const input = byId("document-file");
+  const file = input.files[0];
+  const chip = byId("file-chip");
+
+  if (!file) {
+    chip.hidden = true;
+    showFileError("");
+    return;
+  }
+
+  if (!isAllowedFile(file)) {
+    input.value = "";
+    chip.hidden = true;
+    showFileError("Only .pdf or .txt files are supported.");
+    return;
+  }
+
+  showFileError("");
+  byId("file-name").textContent = file.name;
+  chip.hidden = false;
+  byId("source-name").value = file.name;
+}
+
+function clearFile() {
+  byId("document-file").value = "";
+  byId("source-name").value = "";
+  onFileChosen();
+}
+
 async function processClaim(event) {
   event.preventDefault();
+  const file = byId("document-file").files[0];
+
+  if (!file) {
+    showFileError("Choose a .pdf or .txt claim document to process.");
+    return;
+  }
+  if (!isAllowedFile(file)) {
+    showFileError("Only .pdf or .txt files are supported.");
+    return;
+  }
+
   const button = event.submitter;
   setBusy(button, true);
   try {
-    const result = await requestJson("/claims/process", {
-      method: "POST",
-      body: JSON.stringify({
-        tenant_id: "default",
-        provider_id: byId("provider-select").value,
-        source_name: byId("source-name").value,
-        document_text: byId("document-text").value,
-      }),
-    });
+    const providerId = byId("provider-select").value;
+    const formData = new FormData();
+    formData.append("file", file);
+    const result = await requestJson(
+      `/claims/upload?tenant_id=default&provider_id=${encodeURIComponent(providerId)}`,
+      { method: "POST", body: formData },
+    );
+
+    clearFile();
     await loadWorkflows();
     selectWorkflow(result.state);
   } catch (error) {
@@ -203,18 +331,41 @@ async function submitReview(event) {
   }
 }
 
+function switchView(view) {
+  document.querySelectorAll(".nav-link").forEach((link) => {
+    link.classList.toggle("active", link.dataset.view === view);
+  });
+  document.querySelectorAll("[data-view-panel]").forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.viewPanel === view);
+  });
+}
+
+async function refreshWorkflows() {
+  const button = byId("refresh-button");
+  setBusy(button, true);
+  try {
+    await loadWorkflows();
+  } finally {
+    setBusy(button, false);
+  }
+}
+
 function wireEvents() {
   byId("claim-form").addEventListener("submit", processClaim);
   byId("review-form").addEventListener("submit", submitReview);
-  byId("refresh-button").addEventListener("click", loadWorkflows);
+  byId("refresh-button").addEventListener("click", refreshWorkflows);
   byId("status-filter").addEventListener("change", loadWorkflows);
-  byId("load-sample").addEventListener("click", loadSelectedSample);
+  byId("document-file").addEventListener("change", onFileChosen);
+  byId("clear-file").addEventListener("click", clearFile);
+  document.querySelectorAll(".nav-link").forEach((link) => {
+    link.addEventListener("click", () => switchView(link.dataset.view));
+  });
 }
 
 async function boot() {
   wireEvents();
-  await Promise.all([checkHealth(), loadProviders(), loadWorkflows(), loadSamples()]);
-  loadSelectedSample();
+  switchView("intake");
+  await Promise.all([checkHealth(), loadProviders(), loadWorkflows()]);
 }
 
 boot();

@@ -1,4 +1,4 @@
-tenant_id: default
+tenant_id: care_health
 provider_id: care_health
 display_name: Care Health
 enabled: true

@@ -15,7 +15,6 @@ class AppSettings:
     base_dir: Path
     config_dir: Path
     workflow_dir: Path
-    samples_dir: Path
     log_dir: Path
     log_level: str
     ui_origins: tuple[str, ...] = field(default_factory=lambda: DEFAULT_UI_ORIGINS)
@@ -35,7 +34,6 @@ class AppSettings:
             base_dir=base_dir,
             config_dir=base_dir / "config",
             workflow_dir=base_dir.parent / "data" / "workflows",
-            samples_dir=base_dir.parent / "samples",
             log_dir=log_dir,
             log_level=os.environ.get("LOG_LEVEL", DEFAULT_LOG_LEVEL).upper(),
             ui_origins=ui_origins,

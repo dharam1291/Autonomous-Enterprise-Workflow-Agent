@@ -1,4 +1,4 @@
-tenant_id: default
+tenant_id: max_bupa
 provider_id: max_bupa
 display_name: Max Bupa
 enabled: false

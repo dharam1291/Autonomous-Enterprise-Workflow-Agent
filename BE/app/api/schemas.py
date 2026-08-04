@@ -33,12 +33,3 @@ class ProviderSummary(BaseModel):
     tenant_id: str
     display_name: str
 
-
-class SampleClaim(BaseModel):
-    id: str
-    label: str
-    tenant_id: str
-    provider_id: str
-    source_name: str
-    document_text: str
-

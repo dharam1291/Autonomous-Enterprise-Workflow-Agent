@@ -14,9 +14,9 @@
           <h1>Workflow Agent</h1>
         </div>
         <nav aria-label="Workspace">
-          <a href="#intake" class="nav-link active">Intake</a>
-          <a href="#workflows" class="nav-link">Workflows</a>
-          <a href="#review" class="nav-link">Review</a>
+          <button type="button" class="nav-link active" data-view="intake">Intake</button>
+          <button type="button" class="nav-link" data-view="workflows">Workflows</button>
+          <button type="button" class="nav-link" data-view="review">Review</button>
         </nav>
         <div class="system-status">
           <span class="status-dot" id="health-dot"></span>
@@ -34,28 +34,84 @@
         </section>
 
         <section class="workspace-grid">
-          <form class="panel intake-panel" id="claim-form">
-            <div class="panel-header">
-              <div>
-                <p class="eyebrow">New claim</p>
-                <h3>Document Intake</h3>
+          <div class="tab-content">
+            <form class="panel active" id="claim-form" data-view-panel="intake">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">New claim</p>
+                  <h3>Document Intake</h3>
+                </div>
+                <select id="provider-select" name="provider_id" aria-label="Provider"></select>
               </div>
-              <select id="provider-select" name="provider_id" aria-label="Provider"></select>
-            </div>
-            <label>
-              Source
-              <input id="source-name" name="source_name" value="inline-claim.txt" />
-            </label>
-            <label class="text-block">
-              Claim Document
-              <textarea id="document-text" name="document_text" rows="13"></textarea>
-            </label>
-            <div class="actions">
-              <select id="sample-select" aria-label="Sample claim"></select>
-              <button type="button" class="secondary" id="load-sample">Load sample</button>
-              <button type="submit" class="primary">Process</button>
-            </div>
-          </form>
+
+              <label>
+                Source name
+                <input id="source-name" name="source_name" placeholder="Will be filled from the uploaded file" readonly />
+              </label>
+
+              <div class="field">
+                <span class="field-label">Claim document (PDF or TXT)</span>
+                <div class="upload-dropzone" id="upload-dropzone">
+                  <input id="document-file" type="file" accept=".pdf,.txt,text/plain,application/pdf" required />
+                  <p class="upload-hint">Choose a .pdf or .txt file</p>
+                  <div class="file-chip" id="file-chip" hidden>
+                    <span id="file-name"></span>
+                    <button type="button" class="link-button" id="clear-file">Remove</button>
+                  </div>
+                </div>
+                <p class="field-error" id="file-error" hidden></p>
+              </div>
+
+              <div class="actions">
+                <button type="submit" class="primary">Process Claim</button>
+              </div>
+            </form>
+
+            <section class="panel" id="workflows-panel" data-view-panel="workflows">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Queue</p>
+                  <h3>Workflow History</h3>
+                </div>
+                <select id="status-filter" aria-label="Status filter">
+                  <option value="">All statuses</option>
+                  <option value="WAITING_FOR_HUMAN_REVIEW">Waiting for review</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="REJECTED">Rejected</option>
+                  <option value="INVALID_DOCUMENT">Invalid document</option>
+                  <option value="UNSUPPORTED_PROVIDER">Unsupported provider</option>
+                </select>
+              </div>
+              <div id="workflow-list" class="workflow-list"></div>
+            </section>
+
+            <form class="panel review-panel" id="review-form" data-view-panel="review">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Human in the loop</p>
+                  <h3>Review Decision</h3>
+                </div>
+                <span class="badge muted" id="review-workflow">None</span>
+              </div>
+              <label>
+                Reviewer
+                <input id="reviewer" value="caseworker@example.com" />
+              </label>
+              <label>
+                Decision
+                <select id="review-action">
+                  <option value="approve">Approve</option>
+                  <option value="reject">Reject</option>
+                  <option value="request_more_info">Request more info</option>
+                </select>
+              </label>
+              <label class="text-block">
+                Notes
+                <textarea id="review-notes" rows="5">Reviewed supporting documentation.</textarea>
+              </label>
+              <button type="submit" class="primary">Submit Review</button>
+            </form>
+          </div>
 
           <section class="panel detail-panel" aria-live="polite">
             <div class="panel-header">
@@ -65,6 +121,10 @@
               </div>
               <span class="badge" id="workflow-status">Idle</span>
             </div>
+
+            <h4>Pipeline Progress</h4>
+            <ol class="pipeline-stepper" id="pipeline-stepper"></ol>
+
             <div class="metric-row">
               <div>
                 <span class="metric-label">Recommendation</span>
@@ -90,53 +150,6 @@
               <pre id="generated-output" class="letter-output">-</pre>
             </section>
           </section>
-        </section>
-
-        <section class="lower-grid">
-          <section class="panel" id="workflows">
-            <div class="panel-header">
-              <div>
-                <p class="eyebrow">Queue</p>
-                <h3>Workflow History</h3>
-              </div>
-              <select id="status-filter" aria-label="Status filter">
-                <option value="">All statuses</option>
-                <option value="WAITING_FOR_HUMAN_REVIEW">Waiting for review</option>
-                <option value="APPROVED">Approved</option>
-                <option value="REJECTED">Rejected</option>
-                <option value="INVALID_DOCUMENT">Invalid document</option>
-                <option value="UNSUPPORTED_PROVIDER">Unsupported provider</option>
-              </select>
-            </div>
-            <div id="workflow-list" class="workflow-list"></div>
-          </section>
-
-          <form class="panel review-panel" id="review-form">
-            <div class="panel-header">
-              <div>
-                <p class="eyebrow">Human in the loop</p>
-                <h3>Review Decision</h3>
-              </div>
-              <span class="badge muted" id="review-workflow">None</span>
-            </div>
-            <label>
-              Reviewer
-              <input id="reviewer" value="caseworker@example.com" />
-            </label>
-            <label>
-              Decision
-              <select id="review-action">
-                <option value="approve">Approve</option>
-                <option value="reject">Reject</option>
-                <option value="request_more_info">Request more info</option>
-              </select>
-            </label>
-            <label class="text-block">
-              Notes
-              <textarea id="review-notes" rows="5">Reviewed supporting documentation.</textarea>
-            </label>
-            <button type="submit" class="primary">Submit Review</button>
-          </form>
         </section>
       </main>
     </div>

@@ -41,7 +41,19 @@ python3 -m http.server 5173 --directory UI
 ```bash
 curl -X POST http://127.0.0.1:8000/claims/process \
   -H "Content-Type: application/json" \
-  -d @samples/high_value_claim.json
+  -d '{
+    "tenant_id": "default",
+    "provider_id": "default",
+    "source_name": "high-value-claim.txt",
+    "document_text": "Claim Form\nClaimant Name: Rahul Sharma\nPolicy Number: ABC-987654\nClaim Amount: $14500\nReason for Claim: Surgery and inpatient hospitalization\nProvider Name: Metro Hospital\nService Date: 2026-07-21"
+  }'
+```
+
+PDF or text files can be uploaded directly instead:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/claims/upload?tenant_id=default&provider_id=default" \
+  -F "file=@/path/to/claim.pdf"
 ```
 
 If the response status is `WAITING_FOR_HUMAN_REVIEW`, resume it:
