@@ -1,0 +1,49 @@
+# Default tenant. Self-contained: identity, feature flags, LLM provider, and
+# the business + HITL rule sets. Shared extraction/letter defaults come from
+# the base config files (document_types, entity_schema, hitl_policy,
+# letter_templates) and can be overridden here if needed.
+tenant_id: default
+provider_id: default
+display_name: Default Claims Provider
+enabled: true
+
+features:
+  pdf_ingestion: true
+  auto_processing: true
+  auto_approval: true
+  hitl_review: true
+  rejection_letter_generation: true
+
+llm:
+  provider: deterministic
+  model: local-regex-extractor
+  temperature: 0
+  max_tokens: 1200
+
+business_rules:
+  - id: POLICY_NUMBER_FORMAT
+    description: Policy number format is valid.
+    type: regex_match
+    severity: ERROR
+    enabled: true
+    parameters:
+      entity: policy_number
+      pattern: "[A-Z]{3}-\\d{6}"
+  - id: POLICY_COVERAGE_LIMIT
+    description: Claim amount is within policy coverage limit.
+    type: decimal_lte
+    severity: ERROR
+    enabled: true
+    parameters:
+      entity: claim_amount
+      max: 50000
+
+hitl_rules:
+  - id: HIGH_VALUE_CLAIM_REVIEW
+    description: Claim amount is within automatic processing threshold.
+    type: decimal_gt
+    severity: WARNING
+    enabled: true
+    parameters:
+      entity: claim_amount
+      threshold: 10000

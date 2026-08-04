@@ -1,0 +1,49 @@
+# Max Bupa tenant. Onboarded but not yet activated: enabled=false and every
+# feature flag off, so claims route to UNSUPPORTED_PROVIDER. The rule and LLM
+# sections are still declared so the structure matches every other tenant and
+# the provider can be switched on later by flipping the flags to true.
+tenant_id: max_bupa
+provider_id: max_bupa
+display_name: Max Bupa
+enabled: false
+
+features:
+  pdf_ingestion: false
+  auto_processing: false
+  auto_approval: false
+  hitl_review: false
+  rejection_letter_generation: false
+
+llm:
+  provider: deterministic
+  model: local-regex-extractor
+  temperature: 0
+  max_tokens: 1200
+
+business_rules:
+  - id: POLICY_NUMBER_FORMAT
+    description: Max Bupa policy number format is valid.
+    type: regex_match
+    severity: ERROR
+    enabled: true
+    parameters:
+      entity: policy_number
+      pattern: "MAX-\\d{6}"
+  - id: POLICY_COVERAGE_LIMIT
+    description: Claim amount is within Max Bupa policy coverage limit.
+    type: decimal_lte
+    severity: ERROR
+    enabled: true
+    parameters:
+      entity: claim_amount
+      max: 100000
+
+hitl_rules:
+  - id: MAX_BUPA_HIGH_VALUE_REVIEW
+    description: Max Bupa claim amount is within automatic processing threshold.
+    type: decimal_gt
+    severity: WARNING
+    enabled: true
+    parameters:
+      entity: claim_amount
+      threshold: 20000

@@ -1,7 +1,0 @@
-{
-  "tenant_id": "default",
-  "provider_id": "default",
-  "source_name": "approved-claim.txt",
-  "document_text": "Claim Form\nClaimant Name: Asha Mehta\nPolicy Number: ABC-123456\nClaim Amount: $4500\nReason for Claim: Outpatient treatment reimbursement\nProvider Name: City Care Hospital\nService Date: 2026-07-15"
-}
-
