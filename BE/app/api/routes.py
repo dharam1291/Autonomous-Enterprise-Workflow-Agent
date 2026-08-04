@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
-from app.api.schemas import ClaimTextRequest, HumanReviewRequest, ProviderSummary, WorkflowResponse
+from app.api.schemas import (
+    ClaimTextRequest,
+    HumanReviewRequest,
+    ProviderSummary,
+    SampleClaim,
+    WorkflowResponse,
+)
 from app.core.container import AppContainer
 from app.domain.models import WorkflowState, WorkflowStatus
 from app.services.document_loader import DocumentLoaderError
@@ -11,6 +19,8 @@ from app.workflow.orchestrator import (
     InvalidWorkflowTransitionError,
     WorkflowNotFoundError,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -41,17 +51,39 @@ def providers(container: AppContainer = Depends(get_container)) -> list[Provider
     ]
 
 
+@router.get("/samples", response_model=list[SampleClaim])
+def samples(container: AppContainer = Depends(get_container)) -> list[SampleClaim]:
+    return [
+        SampleClaim(
+            id=sample.id,
+            label=sample.label,
+            tenant_id=sample.tenant_id,
+            provider_id=sample.provider_id,
+            source_name=sample.source_name,
+            document_text=sample.document_text,
+        )
+        for sample in container.sample_repository.list()
+    ]
+
+
 @router.post("/claims/process", response_model=WorkflowResponse)
 def process_claim_text(
     request: ClaimTextRequest,
     workflow: ClaimWorkflowOrchestrator = Depends(get_orchestrator),
 ) -> WorkflowResponse:
+    logger.info(
+        "Processing claim text: tenant=%s provider=%s source=%s",
+        request.tenant_id,
+        request.provider_id,
+        request.source_name,
+    )
     state = workflow.start(
         tenant_id=request.tenant_id,
         provider_id=request.provider_id,
         source_name=request.source_name,
         document_text=request.document_text,
     )
+    logger.info("Claim %s finished with status=%s", state.workflow_id, state.status)
     return response_from_state(state)
 
 
@@ -65,14 +97,22 @@ async def process_claim_upload(
     try:
         document_text = container.document_loader.load_text(file.filename or "uploaded-file", await file.read())
     except DocumentLoaderError as exc:
+        logger.warning("Rejected upload %s: %s", file.filename, exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    logger.info(
+        "Processing claim upload: tenant=%s provider=%s source=%s",
+        tenant_id,
+        provider_id,
+        file.filename,
+    )
     state = container.orchestrator.start(
         tenant_id=tenant_id,
         provider_id=provider_id,
         source_name=file.filename or "uploaded-file",
         document_text=document_text,
     )
+    logger.info("Claim %s finished with status=%s", state.workflow_id, state.status)
     return response_from_state(state)
 
 
@@ -101,6 +141,7 @@ def review_workflow(
     request: HumanReviewRequest,
     workflow: ClaimWorkflowOrchestrator = Depends(get_orchestrator),
 ) -> WorkflowResponse:
+    logger.info("Reviewing workflow %s: action=%s reviewer=%s", workflow_id, request.action, request.reviewer)
     try:
         state = workflow.resume_after_human_review(
             workflow_id=workflow_id,
@@ -109,8 +150,10 @@ def review_workflow(
             notes=request.notes,
         )
     except WorkflowNotFoundError as exc:
+        logger.warning("Review failed, workflow not found: %s", workflow_id)
         raise HTTPException(status_code=404, detail=f"Workflow not found: {workflow_id}") from exc
     except InvalidWorkflowTransitionError as exc:
+        logger.warning("Review failed for %s: %s", workflow_id, exc)
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return response_from_state(state)

@@ -6,4 +6,6 @@ __pycache__/
 data/workflows/*.json
 data/workflows/*.tmp
 .idea
+.env
+logs/
 

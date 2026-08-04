@@ -8,10 +8,20 @@ BE_DIR="$ROOT_DIR/BE"
 UI_DIR="$ROOT_DIR/UI"
 VENV_DIR="$BE_DIR/.venv"
 
+# Load .env files if present. These override any same-named vars you
+# exported before invoking this script - edit the .env files, not the shell,
+# if you want persistent overrides.
+set -a
+[ -f "$BE_DIR/.env" ] && source "$BE_DIR/.env"
+[ -f "$UI_DIR/.env" ] && source "$UI_DIR/.env"
+set +a
+
 BE_HOST="${BE_HOST:-127.0.0.1}"
 BE_PORT="${BE_PORT:-8000}"
 FE_HOST="${FE_HOST:-127.0.0.1}"
 FE_PORT="${FE_PORT:-5173}"
+API_BASE_URL="${API_BASE_URL:-http://${BE_HOST}:${BE_PORT}}"
+UI_ORIGINS="${UI_ORIGINS:-http://${FE_HOST}:${FE_PORT}}"
 
 log() { printf '[start] %s\n' "$1"; }
 
@@ -39,7 +49,7 @@ if [ ! -x "$VENV_DIR/bin/python" ]; then
   "$PYTHON_BIN" -m venv "$VENV_DIR"
 fi
 
-if ! "$VENV_DIR/bin/python" -c "import fastapi, uvicorn, langgraph, pydantic, yaml" >/dev/null 2>&1; then
+if ! "$VENV_DIR/bin/python" -c "import fastapi, uvicorn, langgraph, pydantic, yaml, dotenv" >/dev/null 2>&1; then
   log "Installing backend dependencies"
   "$VENV_DIR/bin/pip" install -q --upgrade pip
   (cd "$BE_DIR" && "$VENV_DIR/bin/pip" install -q -e ".[dev,pdf]")
@@ -49,7 +59,7 @@ mkdir -p "$ROOT_DIR/data/workflows"
 
 # Keep the FE pointed at whichever backend origin this run actually uses.
 cat > "$UI_DIR/config.js" <<EOF
-window.API_BASE_URL = "http://${BE_HOST}:${BE_PORT}";
+window.API_BASE_URL = "${API_BASE_URL}";
 EOF
 
 BE_PID=""
@@ -66,7 +76,7 @@ trap cleanup INT TERM EXIT
 log "Starting backend on http://${BE_HOST}:${BE_PORT}"
 (
   cd "$BE_DIR"
-  export UI_ORIGINS="http://${FE_HOST}:${FE_PORT}"
+  export UI_ORIGINS
   exec "$VENV_DIR/bin/python" -m uvicorn app.main:app --host "$BE_HOST" --port "$BE_PORT" --reload
 ) &
 BE_PID=$!

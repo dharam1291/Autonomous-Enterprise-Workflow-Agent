@@ -1,13 +1,7 @@
-const samples = {
-  approved:
-    "Claim Form\nClaimant Name: Rahul Sharma\nPolicy Number: ABC-987654\nClaim Amount: $4500\nReason for Claim: Consultation\nProvider Name: City Health Clinic\nService Date: 2026-07-15\n",
-  hitl:
-    "Claim Form\nClaimant Name: Rahul Sharma\nPolicy Number: ABC-987654\nClaim Amount: $14500\nReason for Claim: Surgery\nProvider Name: City Hospital\nService Date: 2026-07-15\n",
-};
-
 const state = {
   selectedWorkflowId: null,
   workflows: [],
+  samples: [],
 };
 
 const byId = (id) => document.getElementById(id);
@@ -51,6 +45,26 @@ async function loadProviders() {
     option.textContent = `${provider.display_name}${provider.enabled ? "" : " (disabled)"}`;
     select.appendChild(option);
   });
+}
+
+async function loadSamples() {
+  state.samples = await requestJson("/samples");
+  const select = byId("sample-select");
+  select.innerHTML = "";
+  state.samples.forEach((sample) => {
+    const option = document.createElement("option");
+    option.value = sample.id;
+    option.textContent = sample.label;
+    select.appendChild(option);
+  });
+}
+
+function loadSelectedSample() {
+  const sample = state.samples.find((item) => item.id === byId("sample-select").value);
+  if (!sample) return;
+  byId("document-text").value = sample.document_text;
+  byId("source-name").value = sample.source_name;
+  byId("provider-select").value = sample.provider_id;
 }
 
 async function loadWorkflows() {
@@ -194,18 +208,13 @@ function wireEvents() {
   byId("review-form").addEventListener("submit", submitReview);
   byId("refresh-button").addEventListener("click", loadWorkflows);
   byId("status-filter").addEventListener("change", loadWorkflows);
-  byId("sample-approved").addEventListener("click", () => {
-    byId("document-text").value = samples.approved;
-  });
-  byId("sample-hitl").addEventListener("click", () => {
-    byId("document-text").value = samples.hitl;
-  });
+  byId("load-sample").addEventListener("click", loadSelectedSample);
 }
 
 async function boot() {
-  byId("document-text").value = samples.approved;
   wireEvents();
-  await Promise.all([checkHealth(), loadProviders(), loadWorkflows()]);
+  await Promise.all([checkHealth(), loadProviders(), loadWorkflows(), loadSamples()]);
+  loadSelectedSample();
 }
 
 boot();
