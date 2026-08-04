@@ -2,19 +2,39 @@
 
 FastAPI POC for an insurance/healthcare claim review workflow. The service ingests claim text, classifies the document, extracts configured entities, applies layered validation, pauses for human review when required, and resumes from persisted JSON workflow state.
 
+## Layout
+
+- `BE/` — FastAPI + LangGraph backend (API, workflow graph, LLM providers, config).
+- `UI/` — static frontend (claim intake, workflow queue, HITL review console).
+
 ## Run
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev,pdf]"
-uvicorn app.main:app --reload
+./start.sh
 ```
+
+This creates `BE/.venv` and installs backend dependencies on first run, frees `BE_PORT`/`FE_PORT` if something else is already bound to them, then starts both servers. Stop with `Ctrl+C`.
 
 Open:
 
+- UI: `http://127.0.0.1:5173`
 - API docs: `http://127.0.0.1:8000/docs`
 - Health: `http://127.0.0.1:8000/health`
+
+Ports and hosts are configurable via env vars, e.g. `BE_PORT=8100 FE_PORT=5180 ./start.sh`.
+
+### Running BE/UI separately
+
+```bash
+# backend
+cd BE
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev,pdf]"
+python -m uvicorn app.main:app --reload
+
+# frontend (separate terminal)
+python3 -m http.server 5173 --directory UI
+```
 
 ## Example
 

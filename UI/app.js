@@ -12,8 +12,8 @@ const state = {
 
 const byId = (id) => document.getElementById(id);
 
-async function requestJson(url, options = {}) {
-  const response = await fetch(url, {
+async function requestJson(path, options = {}) {
+  const response = await fetch(`${window.API_BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
   });
