@@ -10,7 +10,7 @@ from app.domain.models import (
     WorkflowStatus,
 )
 from app.graph.state import ClaimGraphState
-from app.llm.base import LLMClient
+from app.llm.clients.base_client import LLMClient
 from app.services.rule_engine import RuleEngine
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.graph.state import ClaimGraphState
-from app.llm.base import LLMClient
+from app.llm.clients.base_client import LLMClient
 
 
 class EntityExtractionNode:

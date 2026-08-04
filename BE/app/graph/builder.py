@@ -13,7 +13,7 @@ from app.graph.nodes.extraction_quality_validation_node import ExtractionQuality
 from app.graph.nodes.hitl_decision_node import HitlDecisionNode
 from app.graph.nodes.letter_generation_node import LetterGenerationNode
 from app.graph.state import ClaimGraphState
-from app.llm.base import LLMClient
+from app.llm.clients.base_client import LLMClient
 from app.services.rule_engine import RuleEngine
 
 
@@ -41,6 +41,35 @@ class ClaimWorkflowGraph:
             state,
             config={"configurable": {"thread_id": workflow_id}},
         )
+
+    def draw_mermaid(self) -> str:
+        """Mermaid definition of the full start-to-end claim graph."""
+        return self._graph.get_graph().draw_mermaid()
+
+    def draw_resume_mermaid(self) -> str:
+        """Mermaid definition of the post-human-review resume graph."""
+        return self._resume_graph.get_graph().draw_mermaid()
+
+    def node_names(self) -> list[str]:
+        return self._executable_nodes(self._graph)
+
+    def resume_node_names(self) -> list[str]:
+        return self._executable_nodes(self._resume_graph)
+
+    @staticmethod
+    def _executable_nodes(compiled) -> list[str]:
+        return [nid for nid in compiled.get_graph().nodes if not nid.startswith("__")]
+
+    @classmethod
+    def for_visualization(cls) -> "ClaimWorkflowGraph":
+        """Build a graph purely to inspect its topology.
+
+        Uses the dependency-free deterministic client so no provider API keys
+        are required just to render the diagram.
+        """
+        from app.llm.clients.deterministic_client import DeterministicLLMClient
+
+        return cls(llm_client=DeterministicLLMClient(), rule_engine=RuleEngine())
 
     @staticmethod
     def _build_graph(llm_client: LLMClient, rule_engine: RuleEngine) -> StateGraph:

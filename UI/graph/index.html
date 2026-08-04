@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Workflow Graph · Autonomous Enterprise Workflow Agent</title>
+    <link rel="stylesheet" href="../styles.css" />
+    <style>
+      .graph-page {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 32px 24px 64px;
+      }
+      .graph-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 8px;
+      }
+      .graph-topbar h1 {
+        margin: 0;
+        font-size: 1.5rem;
+      }
+      .graph-sub {
+        color: var(--muted);
+        margin: 0 0 28px;
+      }
+      .back-link {
+        text-decoration: none;
+        color: var(--accent-strong);
+        font-weight: 600;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        border-radius: 8px;
+        padding: 8px 14px;
+      }
+      .back-link:hover {
+        border-color: var(--accent);
+      }
+      .graph-card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+        padding: 22px 24px;
+        margin-bottom: 28px;
+      }
+      .graph-card h2 {
+        margin: 0 0 4px;
+        font-size: 1.1rem;
+      }
+      .graph-card .eyebrow {
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-size: 0.72rem;
+        margin: 0 0 4px;
+      }
+      .diagram {
+        margin-top: 16px;
+        overflow-x: auto;
+        display: flex;
+        justify-content: center;
+      }
+      .diagram svg {
+        max-width: 100%;
+        height: auto;
+      }
+      .node-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      .node-chip {
+        font-size: 0.78rem;
+        background: #eef4f6;
+        color: var(--accent-strong);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 4px 10px;
+      }
+      .state {
+        color: var(--muted);
+        padding: 24px 0;
+      }
+      .state.error {
+        color: var(--danger);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="graph-page">
+      <div class="graph-topbar">
+        <div>
+          <p class="eyebrow">LangGraph orchestration</p>
+          <h1>Workflow Graph</h1>
+        </div>
+        <a class="back-link" href="../">← Back to console</a>
+      </div>
+      <p class="graph-sub">
+        How each claim flows through the nodes from start to end. Solid arrows are
+        unconditional; dotted arrows are conditional branches (the label is the routing
+        decision). Rendered live from the compiled LangGraph.
+      </p>
+
+      <div id="graph-root">
+        <p class="state" id="graph-status">Loading graph…</p>
+      </div>
+    </div>
+
+    <script src="../config.js"></script>
+    <script type="module" src="graph.js"></script>
+  </body>
+</html>

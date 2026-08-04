@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.domain.models import ValidationOutcome, WorkflowStatus
 from app.graph.state import ClaimGraphState
-from app.llm.base import LLMClient
+from app.llm.clients.base_client import LLMClient
 
 
 class DocumentClassificationNode:

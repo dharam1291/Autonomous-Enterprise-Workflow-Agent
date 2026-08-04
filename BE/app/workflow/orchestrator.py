@@ -9,7 +9,7 @@ from app.domain.models import (
     WorkflowStatus,
 )
 from app.graph.builder import ClaimWorkflowGraph
-from app.llm.provider_factory import LLMProviderFactory
+from app.llm.factory.provider_factory import LLMProviderFactory
 from app.services.rule_engine import RuleEngine
 from app.storage.state_store import WorkflowStateStore
 

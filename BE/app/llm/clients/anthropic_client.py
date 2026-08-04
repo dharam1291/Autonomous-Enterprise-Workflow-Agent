@@ -13,7 +13,15 @@ from app.domain.models import (
     ValidationSeverity,
     WorkflowState,
 )
-from app.llm.base import LLMProviderError
+from app.llm.clients.base_client import LLMProviderError
+from app.llm.prompts import (
+    JSON_SYSTEM_PROMPT,
+    LETTER_SYSTEM_PROMPT,
+    classification_prompt,
+    entity_extraction_prompt,
+    exception_summary_prompt,
+    letter_prompt,
+)
 from app.llm.schemas import EntityExtractionPayload
 
 
@@ -28,14 +36,7 @@ class AnthropicClient:
         self._client = Anthropic()
 
     def classify_document(self, text: str, config: ProviderConfig) -> ValidationFinding:
-        payload = self._json_message(
-            (
-                "Classify whether this is a supported insurance claim document. "
-                "Return JSON with keys is_claim, reason, and matched_signals.\n\n"
-                f"Signals: {config.document_signals}\n\nDocument:\n{text}"
-            ),
-            config,
-        )
+        payload = self._json_message(classification_prompt(text, config), config)
         passed = bool(payload.get("is_claim"))
         return ValidationFinding(
             rule_id="LLM_DOCUMENT_CLASSIFICATION",
@@ -49,14 +50,7 @@ class AnthropicClient:
     def extract_entities(self, text: str, config: ProviderConfig) -> ClaimEntities:
         entity_names = [definition.name for definition in config.entity_definitions]
         payload = EntityExtractionPayload.model_validate(
-            self._json_message(
-                (
-                    "Extract the requested insurance claim entities. Return JSON with keys "
-                    "entities, confidence, evidence, and conflicts. Use null for missing values.\n\n"
-                    f"Entities: {entity_names}\n\nDocument:\n{text}"
-                ),
-                config,
-            )
+            self._json_message(entity_extraction_prompt(text, config), config)
         )
         values = {
             name: ExtractedEntity(
@@ -70,26 +64,17 @@ class AnthropicClient:
         return ClaimEntities(values=values, conflicts=payload.conflicts)
 
     def draft_letter(self, state: WorkflowState, config: ProviderConfig, letter_type: str) -> str:
-        return self._text_message(
-            "Draft a concise professional claim {letter_type} letter from this workflow state:\n{state}".format(
-                letter_type=letter_type,
-                state=state.model_dump_json(),
-            ),
-            config,
-        )
+        return self._text_message(letter_prompt(state, letter_type), config)
 
     def draft_exception_summary(self, state: WorkflowState, config: ProviderConfig) -> str:
-        return self._text_message(
-            f"Draft a concise manual review exception summary from this workflow state:\n{state.model_dump_json()}",
-            config,
-        )
+        return self._text_message(exception_summary_prompt(state), config)
 
     def _json_message(self, prompt: str, config: ProviderConfig) -> dict:
         response = self._client.messages.create(
             model=config.llm.model,
             max_tokens=config.llm.max_tokens,
             temperature=config.llm.temperature,
-            system="You extract and validate insurance claim data. Return JSON only.",
+            system=JSON_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
         )
         text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
@@ -103,7 +88,7 @@ class AnthropicClient:
             model=config.llm.model,
             max_tokens=config.llm.max_tokens,
             temperature=0.2,
-            system="You draft clear, compliant insurance claim correspondence.",
+            system=LETTER_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
         )
         return "".join(block.text for block in response.content if getattr(block, "type", None) == "text")

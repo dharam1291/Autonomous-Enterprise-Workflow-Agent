@@ -13,7 +13,15 @@ from app.domain.models import (
     ValidationSeverity,
     WorkflowState,
 )
-from app.llm.base import LLMProviderError
+from app.llm.clients.base_client import LLMProviderError
+from app.llm.prompts import (
+    JSON_SYSTEM_PROMPT,
+    LETTER_SYSTEM_PROMPT,
+    classification_prompt,
+    entity_extraction_prompt,
+    exception_summary_prompt,
+    letter_prompt,
+)
 from app.llm.schemas import EntityExtractionPayload
 
 
@@ -28,12 +36,7 @@ class OpenAIClient:
         self._client = OpenAI()
 
     def classify_document(self, text: str, config: ProviderConfig) -> ValidationFinding:
-        prompt = (
-            "Classify whether this document is a supported insurance claim document. "
-            "Return JSON with keys is_claim, reason, and matched_signals.\n\n"
-            f"Signals: {config.document_signals}\n\nDocument:\n{text}"
-        )
-        payload = self._json_completion(prompt, config)
+        payload = self._json_completion(classification_prompt(text, config), config)
         passed = bool(payload.get("is_claim"))
         return ValidationFinding(
             rule_id="LLM_DOCUMENT_CLASSIFICATION",
@@ -46,12 +49,9 @@ class OpenAIClient:
 
     def extract_entities(self, text: str, config: ProviderConfig) -> ClaimEntities:
         entity_names = [definition.name for definition in config.entity_definitions]
-        prompt = (
-            "Extract the requested insurance claim entities. Return strict JSON with keys "
-            "entities, confidence, evidence, and conflicts. Use null for missing values.\n\n"
-            f"Entities: {entity_names}\n\nDocument:\n{text}"
+        payload = EntityExtractionPayload.model_validate(
+            self._json_completion(entity_extraction_prompt(text, config), config)
         )
-        payload = EntityExtractionPayload.model_validate(self._json_completion(prompt, config))
         values = {
             name: ExtractedEntity(
                 name=name,
@@ -64,19 +64,10 @@ class OpenAIClient:
         return ClaimEntities(values=values, conflicts=payload.conflicts)
 
     def draft_letter(self, state: WorkflowState, config: ProviderConfig, letter_type: str) -> str:
-        return self._text_completion(
-            "Draft a concise professional claim {letter_type} letter from this workflow state:\n{state}".format(
-                letter_type=letter_type,
-                state=state.model_dump_json(),
-            ),
-            config,
-        )
+        return self._text_completion(letter_prompt(state, letter_type), config)
 
     def draft_exception_summary(self, state: WorkflowState, config: ProviderConfig) -> str:
-        return self._text_completion(
-            f"Draft a concise manual review exception summary from this workflow state:\n{state.model_dump_json()}",
-            config,
-        )
+        return self._text_completion(exception_summary_prompt(state), config)
 
     def _json_completion(self, prompt: str, config: ProviderConfig) -> dict:
         response = self._client.chat.completions.create(
@@ -84,7 +75,7 @@ class OpenAIClient:
             temperature=config.llm.temperature,
             response_format={"type": "json_object"},
             messages=[
-                {"role": "system", "content": "You extract and validate insurance claim data as JSON only."},
+                {"role": "system", "content": JSON_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
         )
@@ -99,7 +90,7 @@ class OpenAIClient:
             model=config.llm.model,
             temperature=0.2,
             messages=[
-                {"role": "system", "content": "You draft clear, compliant insurance claim correspondence."},
+                {"role": "system", "content": LETTER_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
         )

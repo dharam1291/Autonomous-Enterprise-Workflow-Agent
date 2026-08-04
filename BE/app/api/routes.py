@@ -4,9 +4,17 @@ import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
-from app.api.schemas import ClaimTextRequest, HumanReviewRequest, ProviderSummary, WorkflowResponse
+from app.api.schemas import (
+    ClaimTextRequest,
+    GraphResponse,
+    GraphView,
+    HumanReviewRequest,
+    ProviderSummary,
+    WorkflowResponse,
+)
 from app.core.container import AppContainer
 from app.domain.models import WorkflowState, WorkflowStatus
+from app.graph.builder import ClaimWorkflowGraph
 from app.services.document_loader import DocumentLoaderError
 from app.workflow.orchestrator import (
     ClaimWorkflowOrchestrator,
@@ -30,6 +38,24 @@ def get_orchestrator(container: AppContainer = Depends(get_container)) -> ClaimW
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/graph", response_model=GraphResponse)
+def graph_topology() -> GraphResponse:
+    """Return the LangGraph topology (as Mermaid) for the UI to render."""
+    graph = ClaimWorkflowGraph.for_visualization()
+    return GraphResponse(
+        main=GraphView(
+            name="Claim processing",
+            mermaid=graph.draw_mermaid(),
+            nodes=graph.node_names(),
+        ),
+        resume=GraphView(
+            name="Resume after human review",
+            mermaid=graph.draw_resume_mermaid(),
+            nodes=graph.resume_node_names(),
+        ),
+    )
 
 
 @router.get("/providers", response_model=list[ProviderSummary])

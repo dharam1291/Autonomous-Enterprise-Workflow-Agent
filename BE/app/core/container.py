@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from app.config.tenant_config import TenantConfigRepository
 from app.core.settings import AppSettings
-from app.llm.provider_factory import LLMProviderFactory
+from app.llm.factory.provider_factory import LLMProviderFactory
 from app.services.document_loader import DocumentLoader
 from app.services.rule_engine import RuleEngine
 from app.storage.state_store import JsonWorkflowStateStore

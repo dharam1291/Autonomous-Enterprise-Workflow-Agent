@@ -33,3 +33,14 @@ class ProviderSummary(BaseModel):
     tenant_id: str
     display_name: str
 
+
+class GraphView(BaseModel):
+    name: str
+    mermaid: str
+    nodes: list[str]
+
+
+class GraphResponse(BaseModel):
+    main: GraphView
+    resume: GraphView
+

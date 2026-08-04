@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from app.domain.models import ProviderConfig
-from app.llm.anthropic_client import AnthropicClient
-from app.llm.base import LLMClient
-from app.llm.deterministic_client import DeterministicLLMClient
-from app.llm.openai_client import OpenAIClient
+from app.llm.clients.anthropic_client import AnthropicClient
+from app.llm.clients.base_client import LLMClient
+from app.llm.clients.deterministic_client import DeterministicLLMClient
+from app.llm.clients.openai_client import OpenAIClient
 
 
 class LLMProviderFactory:
