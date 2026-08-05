@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+
+from pydantic import ValidationError
 
 from app.domain.models import (
     ClaimEntities,
@@ -23,6 +26,8 @@ from app.llm.prompts import (
     letter_prompt,
 )
 from app.llm.schemas import EntityExtractionPayload
+
+logger = logging.getLogger(__name__)
 
 
 class AnthropicClient:
@@ -49,9 +54,21 @@ class AnthropicClient:
 
     def extract_entities(self, text: str, config: ProviderConfig) -> ClaimEntities:
         entity_names = [definition.name for definition in config.entity_definitions]
-        payload = EntityExtractionPayload.model_validate(
-            self._json_message(entity_extraction_prompt(text, config), config)
-        )
+        raw = self._json_message(entity_extraction_prompt(text, config), config)
+        try:
+            payload = EntityExtractionPayload.model_validate(raw)
+        except ValidationError as exc:
+            logger.error(
+                "Anthropic entity extraction returned JSON that does not match "
+                "EntityExtractionPayload (model=%s).\nRaw LLM payload: %s\nValidation errors: %s",
+                config.llm.model,
+                json.dumps(raw, ensure_ascii=False)[:2000],
+                exc.errors(),
+            )
+            raise LLMProviderError(
+                f"Anthropic entity extraction payload failed schema validation "
+                f"({len(exc.errors())} errors); see logs for the raw model output."
+            ) from exc
         values = {
             name: ExtractedEntity(
                 name=name,

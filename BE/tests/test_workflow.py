@@ -65,28 +65,39 @@ def test_input_guardrail_redacts_pii_before_persisting(tmp_path: Path) -> None:
     assert any(f.rule_id == "INPUT_PII_REDACTION" for f in state.validation_findings)
 
 
-def test_active_max_bupa_provider_processes_to_decision(tmp_path: Path) -> None:
-    workflow = build_orchestrator(tmp_path)
+def test_blocking_business_failure_routes_to_reject() -> None:
+    # A blocking BUSINESS failure, with no HITL trigger and no extraction failure,
+    # must be auto-rejected (not sent to human review). Driven at the node level so
+    # it stays valid regardless of which provider a tenant is configured to use.
+    from app.domain.models import (
+        ValidationFinding,
+        ValidationLayer,
+        ValidationOutcome,
+        ValidationSeverity,
+    )
+    from app.graph.nodes.hitl_decision_node import HitlDecisionNode
+    from app.llm.clients.deterministic_client import DeterministicLLMClient
 
-    state = workflow.start(
-        tenant_id="mb",
-        source_name="claim.txt",
-        document_text=(
-            "Claim Form\n"
-            "Claimant Name: Rahul Sharma\n"
-            "Policy Number: ABC-987654\n"  # not MAX-###### -> fails Max Bupa policy format
-            "Claim Amount: $4500\n"
-            "Reason for Claim: Consultation\n"
-        ),
+    config = ProviderConfig(entity_definitions=[], features={"hitl_review": True})
+    workflow = WorkflowState(
+        tenant_id="t", provider_id="p", source_name="s.txt", document_text="x"
+    )
+    workflow.validation_findings.append(
+        ValidationFinding(
+            rule_id="POLICY_NUMBER_FORMAT",
+            layer=ValidationLayer.BUSINESS,
+            outcome=ValidationOutcome.FAILED,
+            severity=ValidationSeverity.ERROR,
+            message="Policy number format is invalid.",
+        )
     )
 
-    # Max Bupa is active, so the claim is processed to a real decision. Its policy
-    # number does not match the MAX-###### format, so it is rejected.
-    assert state.status == "REJECTED"
-    assert any(
-        f.rule_id == "POLICY_NUMBER_FORMAT" and f.outcome == "FAILED"
-        for f in state.validation_findings
+    result = HitlDecisionNode(RuleEngine(), DeterministicLLMClient())(
+        {"workflow": workflow, "provider_config": config}
     )
+
+    assert result["workflow"].status == "REJECTED"
+    assert result["workflow"].recommendation == "reject"
 
 
 def test_disabled_provider_routes_to_unsupported() -> None:

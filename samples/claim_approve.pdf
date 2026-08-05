@@ -1,0 +1,79 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 324 >>
+stream
+BT
+/F1 12 Tf
+72 720 Td
+16 TL
+(Health Insurance Claim Form) Tj
+T*
+() Tj
+T*
+(Claimant Name: Anita Desai) Tj
+T*
+(Policy Number: ABC-100200) Tj
+T*
+(Claim Amount: $4,500) Tj
+T*
+(Reason for Claim: Outpatient consultation and diagnostic tests) Tj
+T*
+(Provider Name: Sunrise Medical Center) Tj
+T*
+(Service Date: 2026-06-15) Tj
+T*
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+686
+%%EOF1 0 obj
+<< /Info 7 0 R /Pages 2 0 R /Type /Catalog >>
+endobj
+3 0 obj
+<< /Resources << /Font << /F1 4 0 R >> >> /Parent 2 0 R /Type /Page /Rotate
+0 /MediaBox [ 0 0 612 792 ] /Contents 5 0 R >>
+endobj
+6 0 obj
+<< /Producer (macOS Version 26.5.2 \(Build 25F84\) Quartz PDFContext, AppendMode 1.1)
+/ModDate (D:20260805130023Z00'00') >>
+endobj
+7 0 obj
+6 0 R
+endobj
+xref
+0 2
+0000000000 65535 f 
+0000000868 00000 n 
+3 1
+0000000929 00000 n 
+6 2
+0000001067 00000 n 
+0000001206 00000 n 
+trailer
+<< /ID [<><5B02D1002753B12FE6BEE93EE79C4319> ] /Root 1 0 R /Size 8 /Prev 686 >> 
+startxref
+1227
+%%EOF

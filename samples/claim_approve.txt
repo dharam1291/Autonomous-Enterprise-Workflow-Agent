@@ -1,0 +1,8 @@
+Health Insurance Claim Form
+
+Claimant Name: Anita Desai
+Policy Number: CAR-100200
+Claim Amount: $4,500
+Reason for Claim: Outpatient consultation and diagnostic tests
+Provider Name: Sunrise Medical Center
+Service Date: 2026-06-15
