@@ -399,20 +399,10 @@ function setReviewEmptyState(isEmpty) {
   }
 }
 
-async function refreshWorkflows() {
-  const button = byId("refresh-button");
-  setBusy(button, true);
-  try {
-    await loadWorkflows();
-  } finally {
-    setBusy(button, false);
-  }
-}
-
 function wireEvents() {
   byId("claim-form").addEventListener("submit", processClaim);
   byId("review-form").addEventListener("submit", submitReview);
-  byId("refresh-button").addEventListener("click", refreshWorkflows);
+  byId("refresh-button").addEventListener("click", () => window.location.reload());
   byId("status-filter").addEventListener("change", loadWorkflows);
   byId("document-file").addEventListener("change", onFileChosen);
   byId("clear-file").addEventListener("click", clearFile);
