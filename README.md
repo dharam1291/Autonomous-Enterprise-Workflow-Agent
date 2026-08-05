@@ -216,7 +216,7 @@ All settings are read from `BE/.env` (copy `BE/.env.example` to `BE/.env`).
 | Method & path | Purpose |
 | --- | --- |
 | `GET /health` | Liveness check. |
-| `GET /providers` | List configured tenant/providers. |
+| `GET /providers` | List configured tenants (`tenant_id`, `provider_id`, `display_name`, `enabled`). |
 | `GET /graph` | LangGraph topology (main + resume) as Mermaid, for the UI. |
 | `POST /claims/process` | Process a claim from inline text. |
 | `POST /claims/upload` | Process a claim from an uploaded PDF/TXT file. |
@@ -225,14 +225,17 @@ All settings are read from `BE/.env` (copy `BE/.env.example` to `BE/.env`).
 | `POST /workflows/{id}/review` | Submit a human decision to resume a paused claim. |
 | `GET /metrics` | Prometheus metrics (only when `ENABLE_METRICS=true`). |
 
+A claim is addressed to a single **tenant** by its `tenant_id` (`de` = default,
+`ch` = Care Health, `mb` = Max Bupa — from `GET /providers`). The provider is
+derived from the tenant's own config, so no `provider_id` is passed.
+
 Process a claim from text:
 
 ```bash
   curl -X POST http://127.0.0.1:8000/claims/process \
   -H "Content-Type: application/json" \
   -d '{
-    "tenant_id": "default",
-    "provider_id": "default",
+    "tenant_id": "de",
     "source_name": "high-value-claim.txt",
     "document_text": "Claim Form\nClaimant Name: Rahul Sharma\nPolicy Number: ABC-987654\nClaim Amount: $14500\nReason for Claim: Surgery and inpatient hospitalization\nProvider Name: Metro Hospital\nService Date: 2026-07-21"
   }'
@@ -241,9 +244,11 @@ Process a claim from text:
 Upload a file instead:
 
 ```bash
-  curl -X POST "http://127.0.0.1:8000/claims/upload?tenant_id=default&provider_id=default" \
+  curl -X POST "http://127.0.0.1:8000/claims/upload?tenant_id=de" \
   -F "file=@/path/to/claim.pdf"
 ```
+
+An unknown `tenant_id` returns `404`.
 
 If the response status is `WAITING_FOR_HUMAN_REVIEW`, resume it:
 

@@ -6,8 +6,7 @@ from app.domain.models import HumanReviewAction, WorkflowState, WorkflowStatus
 
 
 class ClaimTextRequest(BaseModel):
-    tenant_id: str = Field(default="default", min_length=1)
-    provider_id: str = Field(default="default", min_length=1)
+    tenant_id: str = Field(default="de", min_length=1)
     document_text: str = Field(min_length=1)
     source_name: str = Field(default="inline-text", min_length=1)
 

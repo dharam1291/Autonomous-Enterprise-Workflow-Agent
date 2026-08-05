@@ -44,7 +44,13 @@ class ClaimWorkflowOrchestrator:
         self._llm_provider_factory = llm_provider_factory or LLMProviderFactory()
         self._rule_engine = rule_engine or RuleEngine()
 
-    def start(self, tenant_id: str, provider_id: str, source_name: str, document_text: str) -> WorkflowState:
+    def start(self, tenant_id: str, source_name: str, document_text: str) -> WorkflowState:
+        # Resolve the tenant first: an unknown tenant_id is a client error and
+        # should surface as such, not as a persisted FAILED claim. provider_id
+        # is derived from the tenant's own config, never passed by the caller.
+        config = self._config_repository.get(tenant_id)
+        provider_id = config.provider_id
+
         started = time.perf_counter()
         with workflow_span(
             "claim.process",
@@ -59,7 +65,6 @@ class ClaimWorkflowOrchestrator:
             state.add_audit("Workflow received.")
             self._state_store.create(state)
             try:
-                config = self._config_repository.get(tenant_id=tenant_id, provider_id=provider_id)
                 llm_client = self._llm_provider_factory.create(config)
                 graph = ClaimWorkflowGraph(llm_client=llm_client, rule_engine=self._rule_engine)
                 result = graph.run({"workflow": state, "provider_config": config})
@@ -110,7 +115,7 @@ class ClaimWorkflowOrchestrator:
             },
         ) as span:
             try:
-                config = self._config_repository.get(tenant_id=state.tenant_id, provider_id=state.provider_id)
+                config = self._config_repository.get(state.tenant_id)
                 llm_client = self._llm_provider_factory.create(config)
                 graph = ClaimWorkflowGraph(llm_client=llm_client, rule_engine=self._rule_engine)
                 result = graph.resume_after_review({"workflow": state, "provider_config": config})

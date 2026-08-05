@@ -134,7 +134,7 @@ async function loadProviders() {
   select.innerHTML = "";
   providers.forEach((provider) => {
     const option = document.createElement("option");
-    option.value = provider.provider_id;
+    option.value = provider.tenant_id;
     option.textContent = `${provider.display_name}${provider.enabled ? "" : " (disabled)"}`;
     select.appendChild(option);
   });
@@ -292,11 +292,11 @@ async function processClaim(event) {
   const button = event.submitter;
   setBusy(button, true);
   try {
-    const providerId = byId("provider-select").value;
+    const tenantId = byId("provider-select").value;
     const formData = new FormData();
     formData.append("file", file);
     const result = await requestJson(
-      `/claims/upload?tenant_id=default&provider_id=${encodeURIComponent(providerId)}`,
+      `/claims/upload?tenant_id=${encodeURIComponent(tenantId)}`,
       { method: "POST", body: formData },
     );
 

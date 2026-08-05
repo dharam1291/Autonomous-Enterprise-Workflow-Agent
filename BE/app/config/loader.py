@@ -13,6 +13,10 @@ class ConfigLoadError(RuntimeError):
     """Raised when workflow configuration cannot be loaded."""
 
 
+class UnknownTenantError(ConfigLoadError):
+    """Raised when no tenant file declares the requested tenant_id."""
+
+
 class WorkflowConfigLoader:
     # Shared defaults every tenant inherits. Business and HITL rules are NOT
     # here: they are tenant-specific and must be declared in each
@@ -28,24 +32,28 @@ class WorkflowConfigLoader:
         self._config_dir = config_dir
         self._tenant_dir = config_dir / "tenants"
 
-    def list_tenant_configs(self, tenant_id: str = "default") -> list[ProviderConfig]:
+    def list_tenant_configs(self) -> list[ProviderConfig]:
+        base = self._load_base_config()
         return [
-            self.load_tenant_config(tenant_id=tenant_id, provider_id=path.stem)
+            self._build_config(base, self._read_yaml(path))
             for path in sorted(self._tenant_dir.glob("*.yaml"))
         ]
 
-    def load_tenant_config(self, tenant_id: str, provider_id: str) -> ProviderConfig:
-        base = self._load_base_config()
-        tenant_path = self._tenant_dir / f"{provider_id}.yaml"
-        if not tenant_path.exists():
-            if provider_id != "default":
-                raise ConfigLoadError(f"Missing tenant override: {tenant_path}")
-            tenant_path = self._tenant_dir / "default.yaml"
+    def load_tenant_config(self, tenant_id: str) -> ProviderConfig:
+        """Resolve a tenant by its declared `tenant_id` (e.g. de / ch / mb).
 
-        merged = self._deep_merge(base, self._read_yaml(tenant_path))
-        merged["tenant_id"] = tenant_id
-        merged["provider_id"] = provider_id
-        return ProviderConfig.model_validate(merged)
+        The lookup is on the id inside each YAML, not the file name, so a tenant
+        can be renamed independently of its config file.
+        """
+        base = self._load_base_config()
+        for path in sorted(self._tenant_dir.glob("*.yaml")):
+            data = self._read_yaml(path)
+            if str(data.get("tenant_id")) == tenant_id:
+                return self._build_config(base, data)
+        raise UnknownTenantError(f"Unknown tenant_id '{tenant_id}'.")
+
+    def _build_config(self, base: dict[str, Any], tenant_data: dict[str, Any]) -> ProviderConfig:
+        return ProviderConfig.model_validate(self._deep_merge(base, tenant_data))
 
     def _load_base_config(self) -> dict[str, Any]:
         missing = [name for name in self.REQUIRED_FILES if not (self._config_dir / name).exists()]

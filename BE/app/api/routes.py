@@ -12,6 +12,7 @@ from app.api.schemas import (
     ProviderSummary,
     WorkflowResponse,
 )
+from app.config.tenant_config import UnknownTenantError
 from app.core.container import AppContainer
 from app.domain.models import WorkflowState, WorkflowStatus
 from app.graph.builder import ClaimWorkflowGraph
@@ -76,26 +77,22 @@ def process_claim_text(
     request: ClaimTextRequest,
     workflow: ClaimWorkflowOrchestrator = Depends(get_orchestrator),
 ) -> WorkflowResponse:
-    logger.info(
-        "Processing claim text: tenant=%s provider=%s source=%s",
-        request.tenant_id,
-        request.provider_id,
-        request.source_name,
-    )
-    state = workflow.start(
-        tenant_id=request.tenant_id,
-        provider_id=request.provider_id,
-        source_name=request.source_name,
-        document_text=request.document_text,
-    )
+    logger.info("Processing claim text: tenant=%s source=%s", request.tenant_id, request.source_name)
+    try:
+        state = workflow.start(
+            tenant_id=request.tenant_id,
+            source_name=request.source_name,
+            document_text=request.document_text,
+        )
+    except UnknownTenantError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     logger.info("Claim %s finished with status=%s", state.workflow_id, state.status)
     return response_from_state(state)
 
 
 @router.post("/claims/upload", response_model=WorkflowResponse)
 async def process_claim_upload(
-    tenant_id: str = "default",
-    provider_id: str = "default",
+    tenant_id: str = "de",
     file: UploadFile = File(...),
     container: AppContainer = Depends(get_container),
 ) -> WorkflowResponse:
@@ -105,18 +102,15 @@ async def process_claim_upload(
         logger.warning("Rejected upload %s: %s", file.filename, exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    logger.info(
-        "Processing claim upload: tenant=%s provider=%s source=%s",
-        tenant_id,
-        provider_id,
-        file.filename,
-    )
-    state = container.orchestrator.start(
-        tenant_id=tenant_id,
-        provider_id=provider_id,
-        source_name=file.filename or "uploaded-file",
-        document_text=document_text,
-    )
+    logger.info("Processing claim upload: tenant=%s source=%s", tenant_id, file.filename)
+    try:
+        state = container.orchestrator.start(
+            tenant_id=tenant_id,
+            source_name=file.filename or "uploaded-file",
+            document_text=document_text,
+        )
+    except UnknownTenantError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     logger.info("Claim %s finished with status=%s", state.workflow_id, state.status)
     return response_from_state(state)
 

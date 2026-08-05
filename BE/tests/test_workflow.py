@@ -22,8 +22,7 @@ def test_high_value_claim_pauses_for_human_review(tmp_path: Path) -> None:
     workflow = build_orchestrator(tmp_path)
 
     state = workflow.start(
-        tenant_id="default",
-        provider_id="default",
+        tenant_id="de",
         source_name="claim.txt",
         document_text=(
             "Claim Form\n"
@@ -43,8 +42,7 @@ def test_input_guardrail_redacts_pii_before_persisting(tmp_path: Path) -> None:
     workflow = build_orchestrator(tmp_path)
 
     state = workflow.start(
-        tenant_id="default",
-        provider_id="default",
+        tenant_id="de",
         source_name="claim.txt",
         document_text=(
             "Claim Form\n"
@@ -71,8 +69,7 @@ def test_active_max_bupa_provider_processes_to_decision(tmp_path: Path) -> None:
     workflow = build_orchestrator(tmp_path)
 
     state = workflow.start(
-        tenant_id="max_bupa",
-        provider_id="max_bupa",
+        tenant_id="mb",
         source_name="claim.txt",
         document_text=(
             "Claim Form\n"
@@ -132,8 +129,7 @@ def test_pipeline_exception_marks_workflow_failed(tmp_path: Path) -> None:
     )
 
     state = workflow.start(
-        tenant_id="default",
-        provider_id="default",
+        tenant_id="de",
         source_name="claim.txt",
         document_text=(
             "Claim Form\n"
@@ -157,8 +153,7 @@ def test_non_claim_document_is_invalid(tmp_path: Path) -> None:
     workflow = build_orchestrator(tmp_path)
 
     state = workflow.start(
-        tenant_id="default",
-        provider_id="default",
+        tenant_id="de",
         source_name="notes.txt",
         document_text="Team meeting notes about project planning and hiring.",
     )

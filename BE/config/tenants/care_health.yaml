@@ -1,6 +1,6 @@
 # Care Health tenant. Enabled provider with its own policy-number format and
 # coverage/HITL thresholds. Same section structure as every other tenant.
-tenant_id: care_health
+tenant_id: ch
 provider_id: care_health
 display_name: Care Health
 enabled: true
