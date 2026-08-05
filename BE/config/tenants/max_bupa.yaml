@@ -1,7 +1,6 @@
-# Max Bupa tenant. Onboarded but not yet activated: enabled=false and every
-# feature flag off, so claims route to UNSUPPORTED_PROVIDER. The rule and LLM
-# sections are still declared so the structure matches every other tenant and
-# the provider can be switched on later by flipping the flags to true.
+# Max Bupa tenant. Active provider (enabled=true) running on the deterministic
+# engine. Its business rules enforce a MAX-###### policy-number format and a
+# 100,000 coverage limit; claims above 20,000 route to human review.
 tenant_id: max_bupa
 provider_id: max_bupa
 display_name: Max Bupa
