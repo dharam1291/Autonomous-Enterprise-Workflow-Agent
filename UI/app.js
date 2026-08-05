@@ -352,6 +352,51 @@ function switchView(view) {
     panel.classList.toggle("active", panel.dataset.viewPanel === view);
   });
   byId("view-title").textContent = VIEW_TITLES[view] || "Process Claims";
+  if (view === "review") {
+    focusReviewTarget();
+  }
+}
+
+// Opening the Review tab should land on something reviewable. Keep the current
+// selection if it is already awaiting review; otherwise jump to the most recent
+// claim that needs a decision (queried directly, so the History status filter
+// does not hide it). Show an empty state when nothing is pending.
+async function focusReviewTarget() {
+  const selected = state.workflows.find((item) => item.workflow_id === state.selectedWorkflowId);
+  if (selected && selected.status === "WAITING_FOR_HUMAN_REVIEW") {
+    setReviewEmptyState(false);
+    return;
+  }
+
+  let waiting = [];
+  try {
+    waiting = await requestJson("/workflows?status=WAITING_FOR_HUMAN_REVIEW");
+  } catch (error) {
+    waiting = state.workflows.filter((item) => item.status === "WAITING_FOR_HUMAN_REVIEW");
+  }
+
+  const target = waiting
+    .slice()
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+
+  if (target) {
+    selectWorkflow(target);
+    setReviewEmptyState(false);
+  } else {
+    setReviewEmptyState(true);
+  }
+}
+
+function setReviewEmptyState(isEmpty) {
+  const form = byId("review-form");
+  const submit = form.querySelector("button[type=submit]");
+  byId("review-empty").hidden = !isEmpty;
+  if (submit) {
+    submit.disabled = isEmpty;
+  }
+  if (isEmpty) {
+    byId("review-workflow").textContent = "None";
+  }
 }
 
 async function refreshWorkflows() {

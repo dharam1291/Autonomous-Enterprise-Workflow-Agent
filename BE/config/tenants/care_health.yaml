@@ -45,3 +45,5 @@ hitl_rules:
     parameters:
       entity: claim_amount
       threshold: 15000
+
+#todo: Can Customized default hitl_policy.yaml or entity_schema.yaml based on test but future scope
