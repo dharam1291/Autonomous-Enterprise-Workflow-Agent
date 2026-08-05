@@ -1,0 +1,8 @@
+Health Insurance Claim Form
+
+Claimant Name: Rajesh Kumar
+Policy Number: CAR-778899
+Claim Amount: $28,750
+Reason for Claim: Inpatient hospitalization and surgery
+Provider Name: Metro City Hospital
+Service Date: 2026-07-02

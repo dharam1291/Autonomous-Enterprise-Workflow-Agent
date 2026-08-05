@@ -1,6 +1,6 @@
 # Care Health tenant. Enabled provider with its own policy-number format and
 # coverage/HITL thresholds. Same section structure as every other tenant.
-tenant_id: care_health
+tenant_id: ch
 provider_id: care_health
 display_name: Care Health
 enabled: true
@@ -13,8 +13,8 @@ features:
   rejection_letter_generation: true
 
 llm:
-  provider: deterministic
-  model: local-regex-extractor
+  provider: openai #deterministic
+  model: gpt-4.1-mini #local-regex-extractor
   temperature: 0
   max_tokens: 1200
 
@@ -45,3 +45,5 @@ hitl_rules:
     parameters:
       entity: claim_amount
       threshold: 15000
+
+#todo: Can Customized default hitl_policy.yaml or entity_schema.yaml based on test but future scope

@@ -1,6 +1,7 @@
 const state = {
   selectedWorkflowId: null,
   workflows: [],
+  activeStream: null,
 };
 
 const byId = (id) => document.getElementById(id);
@@ -134,7 +135,7 @@ async function loadProviders() {
   select.innerHTML = "";
   providers.forEach((provider) => {
     const option = document.createElement("option");
-    option.value = provider.provider_id;
+    option.value = provider.tenant_id;
     option.textContent = `${provider.display_name}${provider.enabled ? "" : " (disabled)"}`;
     select.appendChild(option);
   });
@@ -164,7 +165,9 @@ function renderWorkflowList() {
       const row = template.content.firstElementChild.cloneNode(true);
       row.classList.toggle("selected", workflow.workflow_id === state.selectedWorkflowId);
       row.querySelector(".row-id").textContent = workflow.workflow_id;
-      row.querySelector(".row-source").textContent = workflow.source_name;
+      const source = row.querySelector(".row-source");
+      source.textContent = workflow.source_name;
+      source.title = workflow.source_name;
       row.querySelector(".row-status").textContent = workflow.status;
       row.addEventListener("click", () => selectWorkflow(workflow));
       list.appendChild(row);
@@ -258,9 +261,14 @@ function onFileChosen() {
   }
 
   showFileError("");
-  byId("file-name").textContent = file.name;
+  const fileNameEl = byId("file-name");
+  fileNameEl.textContent = file.name;
+  fileNameEl.title = file.name;
   chip.hidden = false;
-  byId("source-name").value = file.name;
+
+  const sourceName = byId("source-name");
+  sourceName.value = file.name;
+  sourceName.title = file.name;
 }
 
 function clearFile() {
@@ -268,6 +276,61 @@ function clearFile() {
   byId("source-name").value = "";
   onFileChosen();
 }
+
+// ── SSE streaming ───────────────────────────────────────────────────
+
+function closeActiveStream() {
+  if (state.activeStream) {
+    state.activeStream.close();
+    state.activeStream = null;
+  }
+}
+
+function streamWorkflow(workflowId, button) {
+  closeActiveStream();
+
+  const source = new EventSource(`${window.API_BASE_URL}/claims/${workflowId}/stream`);
+  state.activeStream = source;
+
+  source.addEventListener("node_complete", (event) => {
+    const data = JSON.parse(event.data);
+    renderStages({ audit_events: data.audit_events, status: data.status });
+    byId("workflow-status").textContent = data.status;
+    byId("current-step").textContent = data.current_step || "-";
+  });
+
+  source.addEventListener("complete", async () => {
+    source.close();
+    state.activeStream = null;
+    await finishStream(workflowId, button);
+  });
+
+  source.addEventListener("error", async (event) => {
+    if (source.readyState === EventSource.CLOSED) {
+      return;
+    }
+    source.close();
+    state.activeStream = null;
+    await finishStream(workflowId, button);
+  });
+}
+
+async function finishStream(workflowId, button) {
+  try {
+    // Fetch the specific workflow directly — loadWorkflows() respects the status
+    // filter, so a just-completed review workflow would be excluded from the
+    // filtered list and never selected, leaving generated-output stale.
+    const [workflow] = await Promise.all([
+      requestJson(`/workflows/${workflowId}`),
+      loadWorkflows(),
+    ]);
+    selectWorkflow(workflow);
+  } finally {
+    setBusy(button, false);
+  }
+}
+
+// ── Claim processing (async submit + SSE) ───────────────────────────
 
 async function processClaim(event) {
   event.preventDefault();
@@ -285,23 +348,24 @@ async function processClaim(event) {
   const button = event.submitter;
   setBusy(button, true);
   try {
-    const providerId = byId("provider-select").value;
+    const tenantId = byId("provider-select").value;
     const formData = new FormData();
     formData.append("file", file);
     const result = await requestJson(
-      `/claims/upload?tenant_id=default&provider_id=${encodeURIComponent(providerId)}`,
+      `/claims/submit?tenant_id=${encodeURIComponent(tenantId)}`,
       { method: "POST", body: formData },
     );
 
     clearFile();
-    await loadWorkflows();
     selectWorkflow(result.state);
+    streamWorkflow(result.workflow_id, button);
   } catch (error) {
     alert(error.message);
-  } finally {
     setBusy(button, false);
   }
 }
+
+// ── Human review (async submit + SSE) ───────────────────────────────
 
 async function submitReview(event) {
   event.preventDefault();
@@ -314,7 +378,7 @@ async function submitReview(event) {
   const button = event.submitter;
   setBusy(button, true);
   try {
-    const result = await requestJson(`/workflows/${workflow.workflow_id}/review`, {
+    const result = await requestJson(`/workflows/${workflow.workflow_id}/review/stream`, {
       method: "POST",
       body: JSON.stringify({
         action: byId("review-action").value,
@@ -322,14 +386,21 @@ async function submitReview(event) {
         notes: byId("review-notes").value,
       }),
     });
-    await loadWorkflows();
     selectWorkflow(result.state);
+    streamWorkflow(result.workflow_id, button);
   } catch (error) {
     alert(error.message);
-  } finally {
     setBusy(button, false);
   }
 }
+
+// ── Navigation & boot ───────────────────────────────────────────────
+
+const VIEW_TITLES = {
+  intake: "Process Claims",
+  workflows: "History",
+  review: "Review",
+};
 
 function switchView(view) {
   document.querySelectorAll(".nav-link").forEach((link) => {
@@ -338,22 +409,54 @@ function switchView(view) {
   document.querySelectorAll("[data-view-panel]").forEach((panel) => {
     panel.classList.toggle("active", panel.dataset.viewPanel === view);
   });
+  byId("view-title").textContent = VIEW_TITLES[view] || "Process Claims";
+  if (view === "review") {
+    focusReviewTarget();
+  }
 }
 
-async function refreshWorkflows() {
-  const button = byId("refresh-button");
-  setBusy(button, true);
+async function focusReviewTarget() {
+  const selected = state.workflows.find((item) => item.workflow_id === state.selectedWorkflowId);
+  if (selected && selected.status === "WAITING_FOR_HUMAN_REVIEW") {
+    setReviewEmptyState(false);
+    return;
+  }
+
+  let waiting = [];
   try {
-    await loadWorkflows();
-  } finally {
-    setBusy(button, false);
+    waiting = await requestJson("/workflows?status=WAITING_FOR_HUMAN_REVIEW");
+  } catch (error) {
+    waiting = state.workflows.filter((item) => item.status === "WAITING_FOR_HUMAN_REVIEW");
+  }
+
+  const target = waiting
+    .slice()
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+
+  if (target) {
+    selectWorkflow(target);
+    setReviewEmptyState(false);
+  } else {
+    setReviewEmptyState(true);
+  }
+}
+
+function setReviewEmptyState(isEmpty) {
+  const form = byId("review-form");
+  const submit = form.querySelector("button[type=submit]");
+  byId("review-empty").hidden = !isEmpty;
+  if (submit) {
+    submit.disabled = isEmpty;
+  }
+  if (isEmpty) {
+    byId("review-workflow").textContent = "None";
   }
 }
 
 function wireEvents() {
   byId("claim-form").addEventListener("submit", processClaim);
   byId("review-form").addEventListener("submit", submitReview);
-  byId("refresh-button").addEventListener("click", refreshWorkflows);
+  byId("refresh-button").addEventListener("click", () => window.location.reload());
   byId("status-filter").addEventListener("change", loadWorkflows);
   byId("document-file").addEventListener("change", onFileChosen);
   byId("clear-file").addEventListener("click", clearFile);

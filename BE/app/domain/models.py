@@ -24,6 +24,7 @@ class WorkflowStatus(StrEnum):
 
 
 class ValidationLayer(StrEnum):
+    GUARDRAIL = "GUARDRAIL"
     DOCUMENT = "DOCUMENT"
     EXTRACTION = "EXTRACTION"
     BUSINESS = "BUSINESS"

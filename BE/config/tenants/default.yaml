@@ -2,9 +2,9 @@
 # the business + HITL rule sets. Shared extraction/letter defaults come from
 # the base config files (document_types, entity_schema, hitl_policy,
 # letter_templates) and can be overridden here if needed.
-tenant_id: default
+tenant_id: de
 provider_id: default
-display_name: Default Claims Provider
+display_name: Default
 enabled: true
 
 features:
