@@ -164,7 +164,9 @@ function renderWorkflowList() {
       const row = template.content.firstElementChild.cloneNode(true);
       row.classList.toggle("selected", workflow.workflow_id === state.selectedWorkflowId);
       row.querySelector(".row-id").textContent = workflow.workflow_id;
-      row.querySelector(".row-source").textContent = workflow.source_name;
+      const source = row.querySelector(".row-source");
+      source.textContent = workflow.source_name;
+      source.title = workflow.source_name;
       row.querySelector(".row-status").textContent = workflow.status;
       row.addEventListener("click", () => selectWorkflow(workflow));
       list.appendChild(row);
@@ -258,9 +260,14 @@ function onFileChosen() {
   }
 
   showFileError("");
-  byId("file-name").textContent = file.name;
+  const fileNameEl = byId("file-name");
+  fileNameEl.textContent = file.name;
+  fileNameEl.title = file.name;
   chip.hidden = false;
-  byId("source-name").value = file.name;
+
+  const sourceName = byId("source-name");
+  sourceName.value = file.name;
+  sourceName.title = file.name;
 }
 
 function clearFile() {
@@ -331,6 +338,12 @@ async function submitReview(event) {
   }
 }
 
+const VIEW_TITLES = {
+  intake: "Process Claims",
+  workflows: "History",
+  review: "Review",
+};
+
 function switchView(view) {
   document.querySelectorAll(".nav-link").forEach((link) => {
     link.classList.toggle("active", link.dataset.view === view);
@@ -338,6 +351,7 @@ function switchView(view) {
   document.querySelectorAll("[data-view-panel]").forEach((panel) => {
     panel.classList.toggle("active", panel.dataset.viewPanel === view);
   });
+  byId("view-title").textContent = VIEW_TITLES[view] || "Process Claims";
 }
 
 async function refreshWorkflows() {

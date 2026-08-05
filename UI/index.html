@@ -4,18 +4,26 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Autonomous Enterprise Workflow Agent</title>
-    <link rel="stylesheet" href="styles.css" />
+    <!-- Dev cache-buster: the static server sends no cache headers, so browsers
+         hold on to old styles.css/app.js across reloads. Loading them with a
+         per-load version query forces a fresh fetch every time. -->
+    <script>
+      window.__ASSET_VERSION__ = Date.now();
+      document.write(
+        '<link rel="stylesheet" href="styles.css?v=' + window.__ASSET_VERSION__ + '">'
+      );
+    </script>
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar">
         <div>
-          <p class="eyebrow">Claims Ops</p>
-          <h1>Workflow Agent</h1>
+<!--          <p class="eyebrow">Claims Ops</p>-->
+          <h1>Autonomous Agent</h1>
         </div>
         <nav aria-label="Workspace">
           <button type="button" class="nav-link active" data-view="intake">Intake</button>
-          <button type="button" class="nav-link" data-view="workflows">Workflows</button>
+          <button type="button" class="nav-link" data-view="workflows">History</button>
           <button type="button" class="nav-link" data-view="review">Review</button>
         </nav>
         <div class="system-status">
@@ -27,8 +35,8 @@
       <main>
         <section class="toolbar">
           <div>
-            <p class="eyebrow">Autonomous insurance POC</p>
-            <h2>Claim validation console</h2>
+            <p class="eyebrow">Autonomous Enterprise Claim Process Agent</p>
+            <h2 id="view-title">Process Claims</h2>
           </div>
           <button class="secondary" id="refresh-button" type="button">Refresh</button>
         </section>
@@ -82,7 +90,7 @@
                   <option value="UNSUPPORTED_PROVIDER">Unsupported provider</option>
                 </select>
               </div>
-              <div id="workflow-list" class="workflow-list"></div>
+              <div id="workflow-list" class="workflow-list" style="margin-top:10px;"></div>
             </section>
 
             <form class="panel review-panel" id="review-form" data-view-panel="review">
@@ -164,7 +172,21 @@
       </button>
     </template>
 
-    <script src="config.js"></script>
-    <script src="app.js"></script>
+    <!-- config.js first (sets API base URL), then app.js; both cache-busted
+         with the same per-load version so edits show on a normal reload. -->
+    <script>
+      (function () {
+        var v = window.__ASSET_VERSION__ || Date.now();
+        function load(src, next) {
+          var s = document.createElement("script");
+          s.src = src + "?v=" + v;
+          s.onload = next || null;
+          document.body.appendChild(s);
+        }
+        load("config.js", function () {
+          load("app.js");
+        });
+      })();
+    </script>
   </body>
 </html>

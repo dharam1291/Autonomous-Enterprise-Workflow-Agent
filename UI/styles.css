@@ -247,6 +247,14 @@ button:disabled {
   color: var(--muted);
 }
 
+.actions {
+  margin-top: 22px;
+}
+
+.review-panel > button[type="submit"] {
+  margin-top: 22px;
+}
+
 .metric-row {
   align-items: stretch;
   margin-top: 16px;
@@ -347,10 +355,29 @@ button:disabled {
   background: #ffffff;
   color: var(--ink);
   text-align: left;
+  white-space: normal;
+}
+
+/* Left cell (id + source) may shrink and truncate; status badge keeps its size
+   so a long status like WAITING_FOR_HUMAN_REVIEW never overflows the column. */
+.workflow-row > span:first-child {
+  min-width: 0;
+}
+
+.workflow-row .row-id,
+.workflow-row .row-source {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-row .row-status {
+  flex-shrink: 0;
+  max-width: 160px;
 }
 
 .workflow-row small {
-  display: block;
   color: var(--muted);
   margin-top: 3px;
 }
@@ -397,17 +424,34 @@ button:disabled {
   font-size: 12px;
 }
 
+/* Readonly Source name field: clip long file names with an ellipsis. */
+#source-name {
+  text-overflow: ellipsis;
+}
+
 .file-chip {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
+  max-width: 100%;
   padding: 6px 10px;
   border-radius: 999px;
   background: #e7f1f4;
   color: var(--accent-strong);
   font-size: 12px;
   font-weight: 700;
+}
+
+.file-chip #file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-chip .link-button {
+  flex-shrink: 0;
 }
 
 .link-button {
