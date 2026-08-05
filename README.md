@@ -98,17 +98,43 @@ numbers.
 
 ### Validation layers
 
-Validation is layered, and each layer contributes findings (with a severity) to the
-workflow state rather than throwing:
+Validation is **layered**. Every layer appends `ValidationFinding`s to the workflow
+state instead of throwing, so a claim always runs to a decision and the full trail is
+visible in the API response and the UI. Each finding carries a **layer**, an
+**outcome** (`PASSED` / `FAILED` / `SKIPPED`), and a **severity**
+(`INFO` / `WARNING` / `ERROR` / `BLOCKER`).
 
-- **Document** — is this a supported claim document at all?
-- **Extraction quality** — were the required entities found with enough confidence?
-- **Business rules** — tenant rules such as policy-number format or coverage limit.
-- **HITL policy** — rules that force human review (e.g. claim amount over a threshold).
-- **Final decision** — the terminal status derived from all findings.
+**What counts as "blocking":** a finding blocks the claim only when its outcome is
+`FAILED` **and** its severity is `ERROR` or `BLOCKER`. `WARNING` and `INFO` findings
+are recorded for the caseworker but never stop the flow on their own. How a blocking
+finding is routed (reject vs. pause for a human) then depends on which layer produced
+it — see the routing summary at the end.
 
-Rules are evaluated by the `RuleEngine` from declarative config (regex match,
-decimal comparisons, thresholds), so changing a limit is a config edit.
+The layers, in execution order:
+
+| Layer | Runs in | What it validates | Emits on failure | Consequence |
+| --- | --- | --- | --- | --- |
+| **GUARDRAIL** | `guardrail_inputs` ([`input_guardrail.py`](BE/app/services/input_guardrail.py)) | Scrubs contact PII (email, phone) from the claim text before any LLM call. | `INFO` finding with redaction counts (never fails the claim). | Protective only — records what was redacted; never blocks. |
+| **DOCUMENT** | `document_classification` ([`document_classifier.py`](BE/app/services/document_classifier.py)) | Is this actually a supported claim? Counts how many of the tenant's `document_signals` appear; passes when the count ≥ `minimum_signal_match`. | `BLOCKER` `FAILED` (`DOCUMENT_TYPE_SIGNAL_MATCH`). | Claim ends as `INVALID_DOCUMENT`; extraction and everything after are skipped. |
+| **EXTRACTION** | `extraction_quality_validation` ([`RuleEngine.validate_extraction`](BE/app/services/rule_engine.py)) | Per configured entity: mandatory entities are present, confidence ≥ the entity's threshold, and no conflicting values were found. | `BLOCKER` if a **mandatory** entity is missing; `ERROR` for **conflicting** values; `WARNING` for **low confidence**. | A `BLOCKER`/`ERROR` here routes to **human review** (if `hitl_review` is on) else reject. A lone `WARNING` does not block. |
+| **BUSINESS** | `business_rule_validation` ([`RuleEngine.validate_business`](BE/app/services/rule_engine.py)) | The tenant's enabled `business_rules`, e.g. `POLICY_NUMBER_FORMAT` (regex) and `POLICY_COVERAGE_LIMIT` (amount ≤ max). | `FAILED` at the rule's configured severity (usually `ERROR`). | A blocking business failure routes to **reject** (not human review, unless a HITL rule also fired). |
+| **HITL** | `hitl_decision` ([`RuleEngine.validate_hitl`](BE/app/services/rule_engine.py)) | The tenant's enabled `hitl_rules`, e.g. `HIGH_VALUE_CLAIM_REVIEW` (amount > threshold). A triggered rule is a `FAILED` HITL finding. | `FAILED` at the rule's severity (usually `WARNING`). | A failed HITL finding **pauses** the claim as `WAITING_FOR_HUMAN_REVIEW` (if `hitl_review` is on). |
+| **FINAL_DECISION** | `audit_logging` ([`RuleEngine.validate_final_decision`](BE/app/services/rule_engine.py)) | Consistency guard: an `APPROVED` claim must have no blocking failures. | `BLOCKER` `FAILED` if an approval contradicts a blocking finding. | Safety net that catches an inconsistent terminal state. |
+
+Business and HITL rules are evaluated by the `RuleEngine` from **declarative config**
+(rule types: `regex_match`, `decimal_lte`, `decimal_gt`, `feature_required`), so
+changing a coverage limit or a review threshold is a YAML edit, not a code change. An
+unknown rule `type` is emitted as a `SKIPPED` finding rather than crashing.
+
+**Routing summary** (decided in `hitl_decision`):
+
+- **Not a claim** (DOCUMENT fails) → `INVALID_DOCUMENT`, workflow ends early.
+- **Extraction blocker/error** (mandatory missing or conflict) → **human review** if
+  `hitl_review` is enabled, otherwise `REJECTED`.
+- **Business error** (bad policy format, over coverage limit) → `REJECTED` — unless a
+  HITL rule also triggered, in which case it pauses for review.
+- **HITL rule triggered** (e.g. high-value claim) → `WAITING_FOR_HUMAN_REVIEW`.
+- **Nothing blocking** → `APPROVED`.
 
 ### Human-in-the-loop pause / resume
 

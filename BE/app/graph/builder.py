@@ -25,7 +25,7 @@ def _add_node(graph: StateGraph, name: str, node) -> None:
 
 
 # Callout captions attached to a node in the Mermaid diagram. Each renders as a
-# separate dashed note pointing at the node (the node itself keeps just its id),
+# separate dashed note connected to the node (the node itself keeps just its id),
 # so the diagram explains what a step does. Extend as more steps deserve one.
 NODE_CAPTIONS: dict[str, str] = {
     "guardrail_inputs": "PII Validation",
@@ -40,26 +40,21 @@ def _annotate_mermaid(mermaid: str) -> str:
     """Attach caption notes to nodes in a LangGraph-generated diagram.
 
     draw_mermaid() renders each node as ``id(id)``. For each captioned node we
-    add a separate note node and a dashed arrow pointing at it, e.g.::
+    append a separate note node plus a dashed connector to it, e.g.::
 
         guardrail_inputs__caption[PII Validation]:::caption
-        guardrail_inputs__caption -.-> guardrail_inputs
+        guardrail_inputs -.- guardrail_inputs__caption
     """
-    lines = mermaid.splitlines()
-    annotated: list[str] = []
-    added = False
-    for line in lines:
-        annotated.append(line)
-        node_id = line.strip().removesuffix(")").rsplit("(", 1)[0] if line.strip().endswith(")") else ""
-        caption = NODE_CAPTIONS.get(node_id)
-        if caption and line.strip() == f"{node_id}({node_id})":
-            caption_id = f"{node_id}__caption"
-            annotated.append(f'\t{caption_id}["{caption}"]:::caption')
-            annotated.append(f"\t{caption_id} -.-> {node_id}")
-            added = True
-    if added:
-        annotated.append(_CAPTION_CLASSDEF)
-    return "\n".join(annotated)
+    extras: list[str] = []
+    for node_id, caption in NODE_CAPTIONS.items():
+        if f"{node_id}({node_id})" not in mermaid:
+            continue
+        caption_id = f"{node_id}__caption"
+        extras.append(f'\t{caption_id}["{caption}"]:::caption')
+        extras.append(f"\t{node_id} -.- {caption_id}")
+    if not extras:
+        return mermaid
+    return "\n".join([mermaid, *extras, _CAPTION_CLASSDEF])
 
 
 class ClaimWorkflowGraph:

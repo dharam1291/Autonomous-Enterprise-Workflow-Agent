@@ -5,14 +5,14 @@
 tenant_id: max_bupa
 provider_id: max_bupa
 display_name: Max Bupa
-enabled: false
+enabled: true
 
 features:
-  pdf_ingestion: false
-  auto_processing: false
-  auto_approval: false
-  hitl_review: false
-  rejection_letter_generation: false
+  pdf_ingestion: true
+  auto_processing: true
+  auto_approval: true
+  hitl_review: true
+  rejection_letter_generation: true
 
 llm:
   provider: deterministic
