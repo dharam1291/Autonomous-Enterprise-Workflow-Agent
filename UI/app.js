@@ -317,11 +317,14 @@ function streamWorkflow(workflowId, button) {
 
 async function finishStream(workflowId, button) {
   try {
-    await loadWorkflows();
-    const workflow = state.workflows.find((w) => w.workflow_id === workflowId);
-    if (workflow) {
-      selectWorkflow(workflow);
-    }
+    // Fetch the specific workflow directly — loadWorkflows() respects the status
+    // filter, so a just-completed review workflow would be excluded from the
+    // filtered list and never selected, leaving generated-output stale.
+    const [workflow] = await Promise.all([
+      requestJson(`/workflows/${workflowId}`),
+      loadWorkflows(),
+    ]);
+    selectWorkflow(workflow);
   } finally {
     setBusy(button, false);
   }
