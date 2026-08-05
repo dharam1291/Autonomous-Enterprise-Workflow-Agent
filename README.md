@@ -17,6 +17,7 @@ entities to extract, document signals, business rules, and review thresholds —
 - [What it does](#what-it-does)
 - [How it works](#how-it-works)
   - [The workflow graph](#the-workflow-graph)
+  - [Input guardrail](#input-guardrail)
   - [Validation layers](#validation-layers)
   - [Human-in-the-loop pause / resume](#human-in-the-loop-pause--resume)
   - [LLM providers](#llm-providers)
@@ -54,6 +55,7 @@ through the nodes; conditional edges decide when to stop early or pause.
 ```
 START
   → document_ingestion            ── unsupported provider ─→ END
+  → guardrail_inputs              (redact contact PII before any LLM)
   → document_classification       ── not a claim ──────────→ END
   → entity_extraction
   → extraction_quality_validation
@@ -64,6 +66,11 @@ START
   → END
 ```
 
+`guardrail_inputs` runs before the first LLM touchpoint and scrubs contact PII
+(email, phone, …) from the claim text with regex redaction, so nothing sensitive
+leaves the system to an external model — regardless of the configured provider.
+See [Input guardrail](#input-guardrail).
+
 When a claim pauses at `hitl_decision`, a second **resume graph**
 (`hitl_decision → letter_or_summary_generation → audit_logging`) continues the run
 after the caseworker submits their decision.
@@ -71,6 +78,23 @@ after the caseworker submits their decision.
 The live topology is served as Mermaid from `GET /graph` and rendered by the UI at
 **`http://127.0.0.1:5173/graph`** — it always reflects the compiled graph, not a
 hand-drawn picture.
+
+### Input guardrail
+
+Before the claim text reaches **any** LLM (classification is the first model call),
+the `guardrail_inputs` node redacts contact PII so it can never leave the system to
+an external provider. Today this is regex-based
+([`app/services/input_guardrail.py`](BE/app/services/input_guardrail.py)) covering
+email and phone/mobile, replacing each hit with a `[REDACTED_EMAIL]` /
+`[REDACTED_PHONE]` placeholder and recording a `GUARDRAIL`-layer finding with the
+counts.
+
+Redaction is deliberately scoped to PII that plays **no** part in adjudication —
+the claim's own entities (claimant name, policy number, amount, dates, provider) are
+left intact so extraction still works. There is a `TODO` in the service to swap in /
+augment with a dedicated anonymization service (Microsoft Presidio, AWS Comprehend
+PII, GCP DLP) for higher-recall detection of names, addresses, Aadhaar/PAN, and card
+numbers.
 
 ### Validation layers
 

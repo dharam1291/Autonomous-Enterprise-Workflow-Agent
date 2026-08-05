@@ -10,6 +10,7 @@ from app.graph.nodes.document_classification_node import DocumentClassificationN
 from app.graph.nodes.document_ingestion_node import DocumentIngestionNode
 from app.graph.nodes.entity_extraction_node import EntityExtractionNode
 from app.graph.nodes.extraction_quality_validation_node import ExtractionQualityValidationNode
+from app.graph.nodes.guardrail_inputs_node import GuardrailInputsNode
 from app.graph.nodes.hitl_decision_node import HitlDecisionNode
 from app.graph.nodes.letter_generation_node import LetterGenerationNode
 from app.graph.state import ClaimGraphState
@@ -21,6 +22,44 @@ from app.services.rule_engine import RuleEngine
 def _add_node(graph: StateGraph, name: str, node) -> None:
     """Register a node wrapped with observability (span + node metrics)."""
     graph.add_node(name, instrument_node(name, node))
+
+
+# Callout captions attached to a node in the Mermaid diagram. Each renders as a
+# separate dashed note pointing at the node (the node itself keeps just its id),
+# so the diagram explains what a step does. Extend as more steps deserve one.
+NODE_CAPTIONS: dict[str, str] = {
+    "guardrail_inputs": "PII Validation",
+}
+
+_CAPTION_CLASSDEF = (
+    "\tclassDef caption fill:#fff8e6,stroke:#d9a441,stroke-dasharray:4 3,color:#7a5b00"
+)
+
+
+def _annotate_mermaid(mermaid: str) -> str:
+    """Attach caption notes to nodes in a LangGraph-generated diagram.
+
+    draw_mermaid() renders each node as ``id(id)``. For each captioned node we
+    add a separate note node and a dashed arrow pointing at it, e.g.::
+
+        guardrail_inputs__caption[PII Validation]:::caption
+        guardrail_inputs__caption -.-> guardrail_inputs
+    """
+    lines = mermaid.splitlines()
+    annotated: list[str] = []
+    added = False
+    for line in lines:
+        annotated.append(line)
+        node_id = line.strip().removesuffix(")").rsplit("(", 1)[0] if line.strip().endswith(")") else ""
+        caption = NODE_CAPTIONS.get(node_id)
+        if caption and line.strip() == f"{node_id}({node_id})":
+            caption_id = f"{node_id}__caption"
+            annotated.append(f'\t{caption_id}["{caption}"]:::caption')
+            annotated.append(f"\t{caption_id} -.-> {node_id}")
+            added = True
+    if added:
+        annotated.append(_CAPTION_CLASSDEF)
+    return "\n".join(annotated)
 
 
 class ClaimWorkflowGraph:
@@ -50,11 +89,11 @@ class ClaimWorkflowGraph:
 
     def draw_mermaid(self) -> str:
         """Mermaid definition of the full start-to-end claim graph."""
-        return self._graph.get_graph().draw_mermaid()
+        return _annotate_mermaid(self._graph.get_graph().draw_mermaid())
 
     def draw_resume_mermaid(self) -> str:
         """Mermaid definition of the post-human-review resume graph."""
-        return self._resume_graph.get_graph().draw_mermaid()
+        return _annotate_mermaid(self._resume_graph.get_graph().draw_mermaid())
 
     def node_names(self) -> list[str]:
         return self._executable_nodes(self._graph)
@@ -81,6 +120,7 @@ class ClaimWorkflowGraph:
     def _build_graph(llm_client: LLMClient, rule_engine: RuleEngine) -> StateGraph:
         graph = StateGraph(ClaimGraphState)
         _add_node(graph, "document_ingestion", DocumentIngestionNode())
+        _add_node(graph, "guardrail_inputs", GuardrailInputsNode())
         _add_node(graph, "document_classification", DocumentClassificationNode(llm_client))
         _add_node(graph, "entity_extraction", EntityExtractionNode(llm_client))
         _add_node(graph, "extraction_quality_validation", ExtractionQualityValidationNode(rule_engine))
@@ -94,10 +134,11 @@ class ClaimWorkflowGraph:
             "document_ingestion",
             ClaimWorkflowGraph._route_after_ingestion,
             {
-                "continue": "document_classification",
+                "continue": "guardrail_inputs",
                 "end": END,
             },
         )
+        graph.add_edge("guardrail_inputs", "document_classification")
         graph.add_conditional_edges(
             "document_classification",
             ClaimWorkflowGraph._route_after_classification,
