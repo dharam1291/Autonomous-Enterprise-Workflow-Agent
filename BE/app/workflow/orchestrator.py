@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from app.config.tenant_config import TenantConfigRepository
 from app.domain.models import (
@@ -19,6 +20,9 @@ from app.llm.factory.provider_factory import LLMProviderFactory
 from app.observability import record_claim_result, workflow_span
 from app.services.rule_engine import RuleEngine
 from app.storage.state_store import WorkflowStateStore
+
+if TYPE_CHECKING:
+    from app.workflow.event_bus import WorkflowEventBus
 
 logger = logging.getLogger(__name__)
 
@@ -44,46 +48,43 @@ class ClaimWorkflowOrchestrator:
         self._llm_provider_factory = llm_provider_factory or LLMProviderFactory()
         self._rule_engine = rule_engine or RuleEngine()
 
+    # ------------------------------------------------------------------
+    # Synchronous (blocking) entry-points — kept for API compat & tests
+    # ------------------------------------------------------------------
+
     def start(self, tenant_id: str, source_name: str, document_text: str) -> WorkflowState:
-        # Resolve the tenant first: an unknown tenant_id is a client error and
-        # should surface as such, not as a persisted FAILED claim. provider_id
-        # is derived from the tenant's own config, never passed by the caller.
-        config = self._config_repository.get(tenant_id)
-        provider_id = config.provider_id
-
-        started = time.perf_counter()
-        with workflow_span(
-            "claim.process",
-            **{"claim.tenant": tenant_id, "claim.provider": provider_id, "claim.source": source_name},
-        ) as span:
-            state = WorkflowState(
-                tenant_id=tenant_id,
-                provider_id=provider_id,
-                source_name=source_name,
-                document_text=document_text,
-            )
-            state.add_audit("Workflow received.")
-            self._state_store.create(state)
-            try:
-                llm_client = self._llm_provider_factory.create(config)
-                graph = ClaimWorkflowGraph(llm_client=llm_client, rule_engine=self._rule_engine)
-                result = graph.run({"workflow": state, "provider_config": config})
-                final = self._state_store.update(result["workflow"])
-                self._observe(span, final, tenant_id, provider_id, started)
-                return final
-            except Exception as exc:  # noqa: BLE001 - pipeline must fail safe
-                return self._fail(state, exc, tenant_id, provider_id, started, span)
-
-    def get(self, workflow_id: str) -> WorkflowState:
-        state = self._state_store.get(workflow_id)
-        if state is None:
-            raise WorkflowNotFoundError(workflow_id)
-        return state
-
-    def list(self, status: WorkflowStatus | None = None) -> list[WorkflowState]:
-        return self._state_store.list_by_status(status)
+        state = self.create_workflow(tenant_id, source_name, document_text)
+        return self.process_workflow(state)
 
     def resume_after_human_review(
+        self,
+        workflow_id: str,
+        action: HumanReviewAction,
+        reviewer: str,
+        notes: str,
+    ) -> WorkflowState:
+        state = self.prepare_resume(workflow_id, action, reviewer, notes)
+        return self.process_resume(state)
+
+    # ------------------------------------------------------------------
+    # Phase 1: create / prepare  (fast, no LLM work)
+    # ------------------------------------------------------------------
+
+    def create_workflow(
+        self, tenant_id: str, source_name: str, document_text: str
+    ) -> WorkflowState:
+        config = self._config_repository.get(tenant_id)
+        state = WorkflowState(
+            tenant_id=tenant_id,
+            provider_id=config.provider_id,
+            source_name=source_name,
+            document_text=document_text,
+        )
+        state.add_audit("Workflow received.")
+        self._state_store.create(state)
+        return state
+
+    def prepare_resume(
         self,
         workflow_id: str,
         action: HumanReviewAction,
@@ -96,34 +97,138 @@ class ClaimWorkflowOrchestrator:
             raise InvalidWorkflowTransitionError(
                 f"Workflow {workflow_id} is not waiting for human review."
             )
-
         state.review_task.status = "COMPLETED"
         state.review_task.reviewer = reviewer
         state.review_task.action = action
         state.review_task.notes = notes
         state.review_task.completed_at = datetime.now(UTC)
         state.add_audit(f"Human review completed by {reviewer} with action '{action}'.")
+        return state
 
+    # ------------------------------------------------------------------
+    # Phase 2: process  (runs the LangGraph pipeline, optionally streams)
+    # ------------------------------------------------------------------
+
+    def process_workflow(
+        self,
+        state: WorkflowState,
+        event_bus: WorkflowEventBus | None = None,
+    ) -> WorkflowState:
+        config = self._config_repository.get(state.tenant_id)
+        provider_id = config.provider_id
         started = time.perf_counter()
+
+        with workflow_span(
+            "claim.process",
+            **{"claim.tenant": state.tenant_id, "claim.provider": provider_id, "claim.source": state.source_name},
+        ) as span:
+            try:
+                llm_client = self._llm_provider_factory.create(config)
+                graph = ClaimWorkflowGraph(llm_client=llm_client, rule_engine=self._rule_engine)
+
+                final_state = state
+                for node_name, node_output in graph.stream(
+                    {"workflow": state, "provider_config": config}
+                ):
+                    final_state = node_output.get("workflow", final_state)
+                    self._emit(event_bus, state.workflow_id, node_name, final_state)
+
+                persisted = self._state_store.update(final_state)
+                self._observe(span, persisted, state.tenant_id, provider_id, started)
+                self._emit_terminal(event_bus, state.workflow_id, "complete", persisted)
+                return persisted
+            except Exception as exc:  # noqa: BLE001 - pipeline must fail safe
+                failed = self._fail(state, exc, state.tenant_id, provider_id, started, span)
+                self._emit_terminal(event_bus, state.workflow_id, "error", failed)
+                return failed
+
+    def process_resume(
+        self,
+        state: WorkflowState,
+        event_bus: WorkflowEventBus | None = None,
+    ) -> WorkflowState:
+        config = self._config_repository.get(state.tenant_id)
+        provider_id = config.provider_id
+        started = time.perf_counter()
+
         with workflow_span(
             "claim.resume",
             **{
-                "claim.workflow_id": workflow_id,
+                "claim.workflow_id": state.workflow_id,
                 "claim.tenant": state.tenant_id,
-                "claim.provider": state.provider_id,
-                "review.action": str(action.value),
+                "claim.provider": provider_id,
+                "review.action": str(getattr(state.review_task, "action", "")),
             },
         ) as span:
             try:
-                config = self._config_repository.get(state.tenant_id)
                 llm_client = self._llm_provider_factory.create(config)
                 graph = ClaimWorkflowGraph(llm_client=llm_client, rule_engine=self._rule_engine)
-                result = graph.resume_after_review({"workflow": state, "provider_config": config})
-                final = self._state_store.update(result["workflow"])
-                self._observe(span, final, state.tenant_id, state.provider_id, started)
-                return final
+                state.add_audit("Workflow resumed after human review.")
+
+                final_state = state
+                for node_name, node_output in graph.stream_resume(
+                    {"workflow": state, "provider_config": config}
+                ):
+                    final_state = node_output.get("workflow", final_state)
+                    self._emit(event_bus, state.workflow_id, node_name, final_state)
+
+                persisted = self._state_store.update(final_state)
+                self._observe(span, persisted, state.tenant_id, provider_id, started)
+                self._emit_terminal(event_bus, state.workflow_id, "complete", persisted)
+                return persisted
             except Exception as exc:  # noqa: BLE001 - pipeline must fail safe
-                return self._fail(state, exc, state.tenant_id, state.provider_id, started, span)
+                failed = self._fail(state, exc, state.tenant_id, provider_id, started, span)
+                self._emit_terminal(event_bus, state.workflow_id, "error", failed)
+                return failed
+
+    # ------------------------------------------------------------------
+    # Query helpers
+    # ------------------------------------------------------------------
+
+    def get(self, workflow_id: str) -> WorkflowState:
+        state = self._state_store.get(workflow_id)
+        if state is None:
+            raise WorkflowNotFoundError(workflow_id)
+        return state
+
+    def list(self, status: WorkflowStatus | None = None) -> list[WorkflowState]:
+        return self._state_store.list_by_status(status)
+
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _emit(
+        event_bus: WorkflowEventBus | None,
+        workflow_id: str,
+        node_name: str,
+        state: WorkflowState,
+    ) -> None:
+        if event_bus is None:
+            return
+        event_bus.publish(workflow_id, {
+            "type": "node_complete",
+            "node": node_name,
+            "status": str(state.status),
+            "current_step": state.current_step,
+            "audit_events": list(state.audit_events),
+        })
+
+    @staticmethod
+    def _emit_terminal(
+        event_bus: WorkflowEventBus | None,
+        workflow_id: str,
+        event_type: str,
+        state: WorkflowState,
+    ) -> None:
+        if event_bus is None:
+            return
+        event_bus.publish(workflow_id, {
+            "type": event_type,
+            "workflow_id": workflow_id,
+            "status": str(state.status),
+        })
 
     @staticmethod
     def _observe(span, state: WorkflowState, tenant_id: str, provider_id: str, started: float) -> None:
@@ -142,13 +247,6 @@ class ClaimWorkflowOrchestrator:
         started: float,
         span,
     ) -> WorkflowState:
-        """Fail-safe terminal handling for an unexpected pipeline error.
-
-        Marks the workflow FAILED, records where it failed and the error *type*
-        (never the raw message, which could carry document content), persists it,
-        and surfaces the failure to logs/metrics/trace. The full traceback goes to
-        the server log only.
-        """
         failed_step = state.current_step or "unknown"
         logger.exception("Workflow %s failed during '%s'", state.workflow_id, failed_step)
 

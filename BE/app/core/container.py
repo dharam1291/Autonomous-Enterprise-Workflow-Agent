@@ -8,6 +8,7 @@ from app.llm.factory.provider_factory import LLMProviderFactory
 from app.services.document_loader import DocumentLoader
 from app.services.rule_engine import RuleEngine
 from app.storage.state_store import JsonWorkflowStateStore
+from app.workflow.event_bus import WorkflowEventBus
 from app.workflow.orchestrator import ClaimWorkflowOrchestrator
 
 
@@ -18,6 +19,7 @@ class AppContainer:
     state_store: JsonWorkflowStateStore
     document_loader: DocumentLoader
     orchestrator: ClaimWorkflowOrchestrator
+    event_bus: WorkflowEventBus
 
 
 def build_container(settings: AppSettings) -> AppContainer:
@@ -35,4 +37,5 @@ def build_container(settings: AppSettings) -> AppContainer:
         state_store=state_store,
         document_loader=DocumentLoader(),
         orchestrator=orchestrator,
+        event_bus=WorkflowEventBus(),
     )

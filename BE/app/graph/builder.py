@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
@@ -75,12 +77,36 @@ class ClaimWorkflowGraph:
             config={"configurable": {"thread_id": workflow_id}},
         )
 
+    def stream(self, state: ClaimGraphState) -> Iterator[tuple[str, ClaimGraphState]]:
+        """Yield ``(node_name, output)`` pairs as each node completes."""
+        workflow_id = state["workflow"].workflow_id
+        for chunk in self._graph.stream(
+            state,
+            config={"configurable": {"thread_id": workflow_id}},
+            stream_mode="updates",
+        ):
+            node_name = next(iter(chunk))
+            if not node_name.startswith("__"):
+                yield node_name, chunk[node_name]
+
     def resume_after_review(self, state: ClaimGraphState) -> ClaimGraphState:
         workflow_id = state["workflow"].workflow_id
         return self._resume_graph.invoke(
             state,
             config={"configurable": {"thread_id": workflow_id}},
         )
+
+    def stream_resume(self, state: ClaimGraphState) -> Iterator[tuple[str, ClaimGraphState]]:
+        """Yield ``(node_name, output)`` pairs during resume processing."""
+        workflow_id = state["workflow"].workflow_id
+        for chunk in self._resume_graph.stream(
+            state,
+            config={"configurable": {"thread_id": workflow_id}},
+            stream_mode="updates",
+        ):
+            node_name = next(iter(chunk))
+            if not node_name.startswith("__"):
+                yield node_name, chunk[node_name]
 
     def draw_mermaid(self) -> str:
         """Mermaid definition of the full start-to-end claim graph."""

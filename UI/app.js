@@ -1,6 +1,7 @@
 const state = {
   selectedWorkflowId: null,
   workflows: [],
+  activeStream: null,
 };
 
 const byId = (id) => document.getElementById(id);
@@ -276,6 +277,58 @@ function clearFile() {
   onFileChosen();
 }
 
+// ── SSE streaming ───────────────────────────────────────────────────
+
+function closeActiveStream() {
+  if (state.activeStream) {
+    state.activeStream.close();
+    state.activeStream = null;
+  }
+}
+
+function streamWorkflow(workflowId, button) {
+  closeActiveStream();
+
+  const source = new EventSource(`${window.API_BASE_URL}/claims/${workflowId}/stream`);
+  state.activeStream = source;
+
+  source.addEventListener("node_complete", (event) => {
+    const data = JSON.parse(event.data);
+    renderStages({ audit_events: data.audit_events, status: data.status });
+    byId("workflow-status").textContent = data.status;
+    byId("current-step").textContent = data.current_step || "-";
+  });
+
+  source.addEventListener("complete", async () => {
+    source.close();
+    state.activeStream = null;
+    await finishStream(workflowId, button);
+  });
+
+  source.addEventListener("error", async (event) => {
+    if (source.readyState === EventSource.CLOSED) {
+      return;
+    }
+    source.close();
+    state.activeStream = null;
+    await finishStream(workflowId, button);
+  });
+}
+
+async function finishStream(workflowId, button) {
+  try {
+    await loadWorkflows();
+    const workflow = state.workflows.find((w) => w.workflow_id === workflowId);
+    if (workflow) {
+      selectWorkflow(workflow);
+    }
+  } finally {
+    setBusy(button, false);
+  }
+}
+
+// ── Claim processing (async submit + SSE) ───────────────────────────
+
 async function processClaim(event) {
   event.preventDefault();
   const file = byId("document-file").files[0];
@@ -296,19 +349,20 @@ async function processClaim(event) {
     const formData = new FormData();
     formData.append("file", file);
     const result = await requestJson(
-      `/claims/upload?tenant_id=${encodeURIComponent(tenantId)}`,
+      `/claims/submit?tenant_id=${encodeURIComponent(tenantId)}`,
       { method: "POST", body: formData },
     );
 
     clearFile();
-    await loadWorkflows();
     selectWorkflow(result.state);
+    streamWorkflow(result.workflow_id, button);
   } catch (error) {
     alert(error.message);
-  } finally {
     setBusy(button, false);
   }
 }
+
+// ── Human review (async submit + SSE) ───────────────────────────────
 
 async function submitReview(event) {
   event.preventDefault();
@@ -321,7 +375,7 @@ async function submitReview(event) {
   const button = event.submitter;
   setBusy(button, true);
   try {
-    const result = await requestJson(`/workflows/${workflow.workflow_id}/review`, {
+    const result = await requestJson(`/workflows/${workflow.workflow_id}/review/stream`, {
       method: "POST",
       body: JSON.stringify({
         action: byId("review-action").value,
@@ -329,14 +383,15 @@ async function submitReview(event) {
         notes: byId("review-notes").value,
       }),
     });
-    await loadWorkflows();
     selectWorkflow(result.state);
+    streamWorkflow(result.workflow_id, button);
   } catch (error) {
     alert(error.message);
-  } finally {
     setBusy(button, false);
   }
 }
+
+// ── Navigation & boot ───────────────────────────────────────────────
 
 const VIEW_TITLES = {
   intake: "Process Claims",
@@ -357,10 +412,6 @@ function switchView(view) {
   }
 }
 
-// Opening the Review tab should land on something reviewable. Keep the current
-// selection if it is already awaiting review; otherwise jump to the most recent
-// claim that needs a decision (queried directly, so the History status filter
-// does not hide it). Show an empty state when nothing is pending.
 async function focusReviewTarget() {
   const selected = state.workflows.find((item) => item.workflow_id === state.selectedWorkflowId);
   if (selected && selected.status === "WAITING_FOR_HUMAN_REVIEW") {
